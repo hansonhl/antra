@@ -3,9 +3,9 @@
 
 import torch
 
-import intervention
-from .utils import serialize
-from .abstraction_utils import create_possible_mappings
+import compgraph
+from compgraph.utils import serialize
+from compgraph.abstraction.mapping import create_possible_mappings
 
 from torch.utils.data import IterableDataset, DataLoader, Subset
 from itertools import product
@@ -102,7 +102,7 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
         #                                   input_tuple[0][:,10:]), dim=1)
 
         high_base_key = [serialize(x) for x in high_input_tensor]
-        high_input = intervention.GraphInput.batched(
+        high_input = compgraph.GraphInput.batched(
             {"input": high_input_tensor.T}, high_base_key)
         # high model uses batch_dim = 0 because all intermediate outputs are
         # in batch-first order.
@@ -117,7 +117,7 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
         #     low_input_tuple_for_graph = [input_tuple[0].T.to(device),
         #                                  input_tuple[-1].to(device)]
 
-        low_input = intervention.GraphInput.batched(
+        low_input = compgraph.GraphInput.batched(
             {"input": low_input_tuple_for_graph}, low_key, batch_dim=low_batch_dim)
         low_output = low_model.compute(low_input)
         low_hidden = low_model.get_result(low_node, low_input)
@@ -144,12 +144,12 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
         high_interv_value = input_tuple[icd.idx_high_hidden]
 
         high_base_key = [serialize(x) for x in high_input]
-        high_base = intervention.GraphInput.batched(
+        high_base = compgraph.GraphInput.batched(
             {"input": high_input.T}, high_base_key, cache_results=False
         )
         high_interv_key = [(serialize(x), serialize(interv)) for x, interv in \
                            zip(high_input, high_interv_value)]
-        high_intervention = intervention.Intervention.batched(
+        high_intervention = compgraph.ComputationGraph.batched(
             high_base, high_interv_key,
             intervention={high_node: high_interv_value},
         )
@@ -167,14 +167,14 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
         #     low_input_tuple_for_graph = [input_tuple[0].T.to(device),
         #                                  input_tuple[-1].to(device)]
 
-        low_base = intervention.GraphInput.batched(
+        low_base = compgraph.GraphInput.batched(
             {"input": low_input_tuple_for_graph}, low_base_key,
             cache_results=False, batch_dim=low_batch_dim)
 
         low_interv_key = [(serialize(x), serialize(interv)) for x, interv in \
                           zip(low_input_tensor, low_interv_value)]
 
-        low_intervention = intervention.Intervention.batched(
+        low_intervention = compgraph.Intervention.batched(
             low_base, low_interv_key,
             intervention={low_node: low_interv_value.to(device)},
             location={low_node: low_loc}, batch_dim=low_batch_dim

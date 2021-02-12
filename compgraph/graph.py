@@ -1,4 +1,4 @@
-from intervention import GraphNode, GraphInput, Intervention, Location
+from compgraph import GraphNode, GraphInput, Intervention, Location
 import itertools
 import torch
 

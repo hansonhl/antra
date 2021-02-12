@@ -1,6 +1,6 @@
 import pytest
 import torch
-from intervention import GraphInput, Intervention, LOC
+from compgraph import GraphInput, Intervention, LOC
 
 @pytest.fixture()
 def base_input():

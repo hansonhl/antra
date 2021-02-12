@@ -2,7 +2,7 @@ import numpy as np
 import copy
 
 import torch
-from intervention.location import Location
+from compgraph import Location
 
 def copy_helper(x):
     if isinstance(x, (list, tuple, str, dict, np.ndarray)):
@@ -11,7 +11,6 @@ def copy_helper(x):
         return x.detach().clone()
     else:
         return x
-
 
 def serialize(x):
     if isinstance(x, torch.Tensor):

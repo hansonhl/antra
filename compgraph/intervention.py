@@ -1,7 +1,7 @@
 import re
 
-from intervention.location import Location
-from intervention.graph_input import GraphInput
+from compgraph import Location
+from compgraph.graph_input import GraphInput
 
 from typing import Dict, Union, Sequence
 

@@ -1,6 +1,6 @@
 import pytest
 import torch
-from intervention import GraphInput
+from compgraph import GraphInput
 
 
 def test_init_device():

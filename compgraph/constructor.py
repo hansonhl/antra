@@ -1,5 +1,5 @@
 import torch
-from intervention import GraphInput, GraphNode, ComputationGraph
+from compgraph import GraphInput, GraphNode, ComputationGraph
 
 # TODO: specify list of modules
 # TODO: `with` wrapper to define modules on the go

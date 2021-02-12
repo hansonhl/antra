@@ -1,10 +1,22 @@
-from setuptools import setup
+import setuptools
 
-setup(
-    name="intervention_experiment",
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
+
+setuptools.setup(
+    name="compgraph",
     version="0.0.1",
-    description="Tools for implementing and running neural network internvention experiments",
-    author="",
-    author_email="",
-    packages=["intervention"]
+    author="Hanson Lu",
+    author_email="hansonlu.hl@gmail.com",
+    description="Lightweight package for defining computation graphs and performing intervention experiments",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url="https://github.com/hansonhl/compgraph",
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+    ],
+    packages=setuptools.find_packages(),
+    python_requires='>=3.7',
 )

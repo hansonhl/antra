@@ -1,6 +1,6 @@
 import pytest
 
-from intervention import ComputationGraph, GraphNode, GraphInput, Intervention
+from compgraph import ComputationGraph, GraphNode, GraphInput, Intervention
 
 
 @pytest.fixture

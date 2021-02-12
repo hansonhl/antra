@@ -1,5 +1,5 @@
-from intervention import Intervention, GraphInput
-from intervention.utils import copy_helper
+from compgraph import Intervention, GraphInput
+from compgraph.utils import copy_helper
 import torch
 
 from typing import Union, Callable, Dict

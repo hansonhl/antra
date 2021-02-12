@@ -1,8 +1,8 @@
-from intervention.location import Location
-from intervention.graph_input import GraphInput
-from intervention.intervention import Intervention
-from intervention.graph_node import GraphNode
-from intervention.graph import ComputationGraph
-from intervention.constructor import CompGraphConstructor
+from .location import Location
+from .graph_input import GraphInput
+from .graph_node import GraphNode
+from .graph import ComputationGraph
+from .intervention import Intervention
+from .constructor import CompGraphConstructor
 
 LOC = Location()

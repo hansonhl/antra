@@ -1,5 +1,5 @@
 import torch
-from intervention import *
+from compgraph import *
 
 
 if __name__ == "__main__":
