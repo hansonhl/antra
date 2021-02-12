@@ -1,6 +1,5 @@
 from compgraph import GraphNode, GraphInput, Intervention, Location
 import itertools
-import torch
 
 from typing import Optional
 from collections import deque
@@ -8,8 +7,7 @@ from collections import deque
 # TODO: add type hints
 
 class ComputationGraph:
-    def __init__(self, root: GraphNode,
-                 root_output_device: Optional[torch.device]=None):
+    def __init__(self, root: GraphNode, root_output_device=None):
         """
         Constructs a computation graph by traversing from a root
         :param root: Root node
@@ -28,7 +26,7 @@ class ComputationGraph:
         if inputs.batched: return None
 
         result = self.results_cache.get(inputs, None)
-        if self.cache_device is not None and isinstance(result, torch.Tensor):
+        if self.cache_device is not None:
             output_device = self.result_output_device_dict[inputs]
             if output_device != self.cache_device:
                 return result.to(output_device)
@@ -39,7 +37,7 @@ class ComputationGraph:
             return
 
         result_for_cache = result
-        if self.cache_device is not None and isinstance(result, torch.Tensor):
+        if self.cache_device is not None:
             if result.device != self.cache_device:
                 result_for_cache = result.to(self.cache_device)
             self.result_output_device_dict[inputs] = result.device
@@ -170,7 +168,7 @@ class ComputationGraph:
         if store_cache:
             self.save_to_cache(inputs, result)
 
-        if isinstance(result, torch.Tensor) and self.root_output_device:
+        if self.root_output_device:
             result = result.to(self.root_output_device)
         return result
 
@@ -245,7 +243,7 @@ class ComputationGraph:
                 "get_result requires a GraphInput or Intervention "
                 "object!")
 
-        if isinstance(res, torch.Tensor) and self.root_output_device:
+        if self.root_output_device:
             res = res.to(self.root_output_device)
         return res
 

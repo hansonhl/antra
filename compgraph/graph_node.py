@@ -1,8 +1,11 @@
+import sys
 from compgraph import Intervention, GraphInput
 from compgraph.utils import copy_helper
-import torch
 
 from typing import Union, Callable, Dict
+
+if "torch" in sys.modules:
+    import compgraph.torch_utils as torch_utils
 
 # TODO: add type hints
 
@@ -81,24 +84,12 @@ class GraphNode:
                (not from_interv) and isinstance(inputs, GraphInput)
 
         if inputs.batched:
-            values = [cache.get(key, None) for key in inputs.keys]
-            if any(value is None for value in values):
-                return None
-            one_key, one_value = inputs.keys[0], values[0]
-            if isinstance(one_value, torch.Tensor):
-                # stack all the values together into one tensor
-                stack_dim = 0 if one_value.dim() == 0 else inputs.batch_dim
-                result = torch.stack(values, dim=stack_dim)
-                if self.cache_device is not None:
-                    output_device = output_device_dict[one_key]
-                    if output_device != self.cache_device:
-                        return result.to(output_device)
-            else:
-                result = values
+            result = torch_utils.get_batch_from_cache(
+                inputs, cache, self.cache_device, output_device_dict)
         else:
             result = cache.get(inputs, None)
 
-            if self.cache_device is not None and isinstance(result, torch.Tensor):
+            if self.cache_device is not None:
                 output_device = output_device_dict[inputs]
                 if output_device != self.cache_device:
                     return result.to(output_device)
@@ -114,28 +105,10 @@ class GraphNode:
             else self.base_output_devices
 
         if inputs.batched:
-            result_for_cache = result
-            if self.cache_device is not None and isinstance(result, torch.Tensor):
-                if result.device != self.cache_device:
-                    result_for_cache = result.to(self.cache_device)
-                output_device_dict.update((key, result.device) for key in inputs.keys)
-            if inputs.batch_dim == 0 or isinstance(result_for_cache, torch.Tensor) \
-                    and result_for_cache.dim() == 1:
-                cache.update((key, value) for key, value in
-                             zip(inputs.keys, result_for_cache))
-
-            elif isinstance(result_for_cache, torch.Tensor):
-                # print("results_for_cache.shape", result_for_cache.shape)
-                split = result_for_cache.split(1, dim=inputs.batch_dim)
-                # print("split[0].shape", split[0].shape)
-                cache.update((key, value.squeeze(inputs.batch_dim))
-                             for key, value in zip(inputs.keys, split))
-            else:
-                raise RuntimeError(f"Does not support type {type(result_for_cache)} "
-                    f"during computation for batch_dim={inputs.batch_dim}")
+            torch_utils.save_batch_to_cache(inputs, result, cache, self.cache_device, output_device_dict)
         else:
             result_for_cache = result
-            if self.cache_device is not None and isinstance(result, torch.Tensor):
+            if self.cache_device is not None:
                 if result.device != self.cache_device:
                     result_for_cache = result.to(self.cache_device)
                 output_device_dict[inputs] = result.device

@@ -1,5 +1,5 @@
 from compgraph import ComputationGraph, GraphNode, Location
-from compgraph.abstraction.mapping import create_possible_mappings
+from compgraph.interchange.mapping import create_possible_mappings
 
 
 class BooleanLogicProgram(ComputationGraph):

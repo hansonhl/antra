@@ -1,10 +1,10 @@
-# This script is the same as `causal_abstraction/non_batched.py`.
-# This script is depended on by batched.py
+# This script is the same as `causal_abstraction/abstraction.py`.
+# This script is depended on by abstraction_batched.py
 # It is duplicated here to support old pickled experiment result files.
 
 import copy
 from compgraph import Intervention
-from compgraph.abstraction.mapping import create_possible_mappings
+from compgraph.interchange.mapping import create_possible_mappings
 from compgraph.utils import serialize, deserialize
 
 

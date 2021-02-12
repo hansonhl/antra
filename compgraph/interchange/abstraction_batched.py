@@ -5,7 +5,7 @@ import torch
 
 import compgraph
 from compgraph.utils import serialize
-from compgraph.abstraction.mapping import create_possible_mappings
+from compgraph.interchange.mapping import create_possible_mappings
 
 from torch.utils.data import IterableDataset, DataLoader, Subset
 from itertools import product

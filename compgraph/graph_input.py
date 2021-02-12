@@ -1,4 +1,3 @@
-import torch
 from typing import Dict, Any, Sequence
 
 class GraphInput:
@@ -72,12 +71,12 @@ class GraphInput:
                 ("'%s': %s" % (k, type(v))) for k, v in self.values.items())
             return "GraphInput{%s}" % s
 
-    def to(self, device):
+    def to_(self, device):
         """Move all data to a pytorch Device.
 
         This does NOT modify the original GraphInput object but returns a new
         one. """
-        assert all(isinstance(t, torch.Tensor) for _, t in self._values.items())
+        # assert all(isinstance(t, torch.Tensor) for _, t in self._values.items())
 
         new_values = {k: v.to(device) for k, v in self._values.items()}
         return GraphInput(new_values)
