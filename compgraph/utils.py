@@ -2,7 +2,7 @@ import numpy as np
 import copy
 
 import torch
-from compgraph import Location
+from .location import Location
 
 def copy_helper(x):
     if isinstance(x, (list, tuple, str, dict, np.ndarray)):

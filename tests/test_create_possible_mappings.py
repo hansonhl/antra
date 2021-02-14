@@ -62,8 +62,8 @@ class BooleanLogicProgram2(ComputationGraph):
 
         super().__init__(bool_root)
 
-model1 = BooleanLogicProgram()
-model2 = BooleanLogicProgram2()
-for mapping in create_possible_mappings(model2,model1, fixed_assignments={x:{x:Location()[:]} for x in ["bool_root", "bool_leaf1",  "bool_leaf2", "bool_leaf3", "bool_leaf4"]} ):
-    print(mapping)
-    print("\n\n")
+# model1 = BooleanLogicProgram()
+# model2 = BooleanLogicProgram2()
+# for mapping in create_possible_mappings(model2,model1, fixed_assignments={x:{x:Location()[:]} for x in ["bool_root", "bool_leaf1",  "bool_leaf2", "bool_leaf3", "bool_leaf4"]} ):
+#     print(mapping)
+#     print("\n\n")

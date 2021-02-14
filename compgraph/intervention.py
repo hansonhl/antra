@@ -1,7 +1,7 @@
 import re
 
-from compgraph import Location
-from compgraph.graph_input import GraphInput
+from .location import Location
+from .graph_input import GraphInput
 
 from typing import Dict, Union, Sequence
 
@@ -49,7 +49,7 @@ class Intervention:
             raise ValueError("Must provide keys for each element of the batch!")
 
     @classmethod
-    def batched(cls, base: GraphInput, keys: Sequence,
+    def batched(cls, base: Union[Dict, GraphInput], keys: Sequence,
                 intervention: Union[Dict, GraphInput]=None,
                 location: Dict=None, cache_results: bool=False,
                 cache_base_results: bool=False,

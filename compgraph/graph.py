@@ -1,5 +1,9 @@
-from compgraph import GraphNode, GraphInput, Intervention, Location
 import itertools
+
+from .intervention import Intervention
+from .graph_node import GraphNode
+from .graph_input import GraphInput
+from .location import Location
 
 from typing import Optional
 from collections import deque
@@ -140,7 +144,7 @@ class ComputationGraph:
         """
         self.validate_inputs(intervention.base)
 
-        if intervention.intervention is None:
+        if not intervention.intervention:
             raise RuntimeError("Must specify some kind of intervention!")
 
         for name in intervention.intervention.values.keys():
@@ -194,9 +198,10 @@ class ComputationGraph:
         """
         base_res = self.compute(intervention.base)
 
-        interv_res = self.get_from_cache(intervention)
         self.validate_interv(intervention)
         intervention.find_affected_nodes(self)
+
+        interv_res = self.get_from_cache(intervention)
         if not interv_res:
             interv_res = self.root.compute(intervention)
             if store_cache:
@@ -218,7 +223,7 @@ class ComputationGraph:
             del self.result_output_device_dict
             self.result_output_device_dict = {}
 
-    def get_result(self, node_name, x):
+    def compute_node(self, node_name, x):
         node = self.nodes[node_name]
         res = None
 

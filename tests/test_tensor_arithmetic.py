@@ -4,7 +4,7 @@ import torch
 from compgraph import ComputationGraph, GraphNode, GraphInput, Intervention, LOC
 
 def eq(g, input, node_name, other):
-    return torch.all(g.get_result(node_name, input) == other)
+    return torch.all(g.compute_node(node_name, input) == other)
 
 @pytest.fixture
 def tensor_input1():

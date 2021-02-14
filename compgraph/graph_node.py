@@ -1,6 +1,8 @@
 import sys
-from compgraph import Intervention, GraphInput
-from compgraph.utils import copy_helper
+
+from .intervention import Intervention
+from .graph_input import GraphInput
+from .utils import copy_helper
 
 from typing import Union, Callable, Dict
 
@@ -55,6 +57,10 @@ class GraphNode:
 
     def __repr__(self):
         return "GraphNode(\"%s\")" % self.name
+
+    @classmethod
+    def leaf(cls, name: str):
+        return cls(name=name, forward=lambda x: x)
 
     @property
     def children(self):

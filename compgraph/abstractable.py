@@ -1,5 +1,5 @@
-from compgraph import ComputationGraph
-from compgraph import GraphNode
+from .graph import ComputationGraph
+from .graph_node import GraphNode
 
 from typing import Any, Dict, List, Callable, Set
 

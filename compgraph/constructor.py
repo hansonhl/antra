@@ -1,5 +1,8 @@
 import torch
-from compgraph import GraphInput, GraphNode, ComputationGraph
+
+from .graph_input import GraphInput
+from .graph_node import GraphNode
+from .graph import ComputationGraph
 
 # TODO: specify list of modules
 # TODO: `with` wrapper to define modules on the go

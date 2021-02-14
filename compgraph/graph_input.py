@@ -71,7 +71,7 @@ class GraphInput:
                 ("'%s': %s" % (k, type(v))) for k, v in self.values.items())
             return "GraphInput{%s}" % s
 
-    def to_(self, device):
+    def to(self, device):
         """Move all data to a pytorch Device.
 
         This does NOT modify the original GraphInput object but returns a new
