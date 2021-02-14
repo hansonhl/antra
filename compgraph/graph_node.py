@@ -99,7 +99,6 @@ class GraphNode:
                 output_device = output_device_dict[inputs]
                 if output_device != self.cache_device:
                     return result.to(output_device)
-
         return result
 
     def save_to_cache(self, inputs, result, to_interv):
@@ -153,7 +152,7 @@ class GraphNode:
                     result = self.get_from_cache(inputs, from_interv=False)
                     if result is None:
                         raise RuntimeError(
-                            "Must compute result without intervention once "
+                            f"Must compute result of node \"{self.name}\" without intervention once "
                             "before intervening (base: %s, intervention: %s)"
                             % (intervention.base, intervention.intervention))
                     result = copy_helper(result)

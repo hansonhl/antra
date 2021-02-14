@@ -2,6 +2,7 @@ import torch
 
 def get_batch_from_cache(inputs, cache, cache_device, output_device_dict):
     values = [cache.get(key, None) for key in inputs.keys]
+
     if any(value is None for value in values):
         return None
     one_key, one_value = inputs.keys[0], values[0]
@@ -13,6 +14,7 @@ def get_batch_from_cache(inputs, cache, cache_device, output_device_dict):
             output_device = output_device_dict[one_key]
             if output_device != cache_device:
                 return result.to(output_device)
+        return result
     else:
         return values
 
