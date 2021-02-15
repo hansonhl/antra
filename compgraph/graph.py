@@ -19,41 +19,40 @@ class ComputationGraph:
             root output to a given device
         """
         self.root = root
-        self.root_output_device = root_output_device
         self.nodes = {}
-        self.results_cache = {}  # caches final results compute(), intervene()
-        self.leaves = set()
-        self.validate_graph()
-        self.cache_device = None
+        self.leaves = self.validate_graph()
 
-    def get_from_cache(self, inputs):
-        if inputs.batched: return None
+        # self.root_output_device = root_output_device
+        # self.cache_device = None
 
-        result = self.results_cache.get(inputs, None)
-        if self.cache_device is not None:
-            output_device = self.result_output_device_dict[inputs]
-            if output_device != self.cache_device:
-                return result.to(output_device)
-        return result
-
-    def save_to_cache(self, inputs, result):
-        if not inputs.cache_results or inputs.batched:
-            return
-
-        result_for_cache = result
-        if self.cache_device is not None:
-            if result.device != self.cache_device:
-                result_for_cache = result.to(self.cache_device)
-            self.result_output_device_dict[inputs] = result.device
-
-        self.results_cache[inputs] = result_for_cache
-
-    def set_cache_device(self, cache_device):
-        self.cache_device = cache_device
-        self.result_output_device_dict = {}
-
-        for node in self.nodes.values():
-            node.cache_device = cache_device
+    # def get_from_cache(self, inputs):
+    #     if inputs.batched: return None
+    #
+    #     result = self.results_cache.get(inputs, None)
+    #     if self.cache_device is not None:
+    #         output_device = self.result_output_device_dict[inputs]
+    #         if output_device != self.cache_device:
+    #             return result.to(output_device)
+    #     return result
+    #
+    # def save_to_cache(self, inputs, result):
+    #     if not inputs.cache_results or inputs.batched:
+    #         return
+    #
+    #     result_for_cache = result
+    #     if self.cache_device is not None:
+    #         if result.device != self.cache_device:
+    #             result_for_cache = result.to(self.cache_device)
+    #         self.result_output_device_dict[inputs] = result.device
+    #
+    #     self.results_cache[inputs] = result_for_cache
+    #
+    # def set_cache_device(self, cache_device):
+    #     self.cache_device = cache_device
+    #     self.result_output_device_dict = {}
+    #
+    #     for node in self.nodes.values():
+    #         node.cache_device = cache_device
 
     def get_nodes_and_dependencies(self):
         nodes = [node_name for node_name in self.nodes]
@@ -112,6 +111,7 @@ class ComputationGraph:
         """
 
         # TODO: check for cycles
+        leaves = set()
         def add_node(node):
             if node.name in self.nodes:
                 if self.nodes[node.name] is not node:
@@ -121,10 +121,11 @@ class ComputationGraph:
                     return
             self.nodes[node.name] = node
             if len(node.children) == 0:
-                self.leaves.add(node)
+                leaves.add(node)
             for child in node.children:
                 add_node(child)
         add_node(self.root)
+        return leaves
 
     def validate_inputs(self, inputs):
         """
@@ -161,20 +162,22 @@ class ComputationGraph:
         :param store_cache:
         :return:
         """
-        result = self.get_from_cache(inputs)
-        if not result:
-            self.validate_inputs(inputs)
-            if iterative:
-                result = self._iterative_compute(inputs)
-            else:
-                result = self.root.compute(inputs)
-
-        if store_cache:
-            self.save_to_cache(inputs, result)
-
-        if self.root_output_device:
-            result = result.to(self.root_output_device)
-        return result
+        self.validate_inputs(inputs)
+        return self.root.compute(inputs)
+        # result = self.get_from_cache(inputs)
+        # if not result:
+        #     self.validate_inputs(inputs)
+        #     if iterative:
+        #         result = self._iterative_compute(inputs)
+        #     else:
+        #         result = self.root.compute(inputs)
+        #
+        # if store_cache:
+        #     self.save_to_cache(inputs, result)
+        #
+        # if self.root_output_device:
+        #     result = result.to(self.root_output_device)
+        # return result
 
     def _iterative_compute(self, inputs):
         """
@@ -201,11 +204,13 @@ class ComputationGraph:
         self.validate_interv(intervention)
         intervention.find_affected_nodes(self)
 
-        interv_res = self.get_from_cache(intervention)
-        if not interv_res:
-            interv_res = self.root.compute(intervention)
-            if store_cache:
-                self.save_to_cache(intervention, interv_res)
+        interv_res = self.root.compute(intervention)
+
+        # interv_res = self.get_from_cache(intervention)
+        # if not interv_res:
+        #     interv_res = self.root.compute(intervention)
+        #     if store_cache:
+        #         self.save_to_cache(intervention, interv_res)
 
         return base_res, interv_res
 
@@ -216,12 +221,12 @@ class ComputationGraph:
                 clear_cache(c)
 
         clear_cache(self.root)
-        del self.results_cache
-        self.results_cache = {}
-
-        if hasattr(self, "result_output_device_dict"):
-            del self.result_output_device_dict
-            self.result_output_device_dict = {}
+        # del self.results_cache
+        # self.results_cache = {}
+        #
+        # if hasattr(self, "result_output_device_dict"):
+        #     del self.result_output_device_dict
+        #     self.result_output_device_dict = {}
 
     def compute_node(self, node_name, x):
         node = self.nodes[node_name]
@@ -244,12 +249,10 @@ class ComputationGraph:
             # else:
             #     res = node.interv_cache[x]
         else:
-            raise RuntimeError(
-                "get_result requires a GraphInput or Intervention "
-                "object!")
+            raise RuntimeError("compute_node requires a GraphInput or Intervention object!")
 
-        if self.root_output_device:
-            res = res.to(self.root_output_device)
+        # if self.root_output_device:
+        #     res = res.to(self.root_output_device)
         return res
 
     def get_state_dict(self):

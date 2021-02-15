@@ -141,7 +141,6 @@ def test_singleton_interv(singleton_graph, input_leaf1):
 def test_singleton_clear_cache(intervened_graph):
     intervened_graph.clear_caches()
 
-    assert len(intervened_graph.results_cache) == 0
     leaf1_node = intervened_graph.nodes["node1"]
     assert len(leaf1_node.base_cache) == 0
 
