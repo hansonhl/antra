@@ -1,5 +1,7 @@
 from typing import Dict, Any, Sequence
 
+from .utils import serialize
+
 class GraphInput:
     """ A hashable input object that stores a dict mapping names of nodes to
     values of arbitrary type.
@@ -8,7 +10,8 @@ class GraphInput:
     can have a one-to-one correspondence to the dict stored in it. """
 
     def __init__(self, values: Dict[str,Any], cache_results: bool=True,
-                 batched: bool=False, batch_dim: int=0, keys: Sequence=None):
+                 batched: bool=False, batch_dim: int=0, keys: Sequence=None,
+                 key_leaves: Sequence[str]=None):
         """
         :param values: A dict mapping from each leaf node name (str) to an input
             value for that node (Any)
@@ -23,10 +26,16 @@ class GraphInput:
         self.cache_results=cache_results
         self.batched = batched
         self.batch_dim = batch_dim
-        self.keys = keys
-        if batched and not self.keys:
-            raise ValueError("Must provide keys for each element of the batch!")
 
+        if batched and not keys:
+            raise ValueError("Must provide keys for each element of the batch!")
+        if not batched and not keys:
+            if not key_leaves:
+                keys = serialize(values)
+            else:
+                keys = serialize({k: v for k, v in values if k in key_leaves})
+
+        self.keys = keys
         # self._all_tensors = len(values) > 0 and all(isinstance(v, torch.Tensor)
         #                                             for v in values.values())
         #

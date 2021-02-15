@@ -5,7 +5,8 @@
 import copy
 from compgraph import Intervention
 from compgraph.interchange.mapping import create_possible_mappings
-from compgraph.utils import serialize, deserialize
+from compgraph.utils import serialize
+from compgraph.torch_utils import deserialize
 
 
 def get_value(high_model, high_node, high_intervention):

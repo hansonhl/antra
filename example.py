@@ -62,6 +62,8 @@ if __name__ == "__main__":
             def node1(x, y):
                 return x + y
 
+            print(node1.children)
+
             @GraphNode(node1)
             def node2(z):
                 return -1 * z
@@ -85,6 +87,9 @@ if __name__ == "__main__":
 
     before, after = g2.intervene(interv2)
     print("Before:", before, "after:", after)
+
+    node1_res = g2.compute_node("node1", input2)
+    print("node1 result", node1_res)
 
     input3 = {"node1": torch.tensor([300, 300]), "node2": torch.tensor([100])}
     locs = {"node1": LOC[:2], "node2": 2}

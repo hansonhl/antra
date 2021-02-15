@@ -59,11 +59,19 @@ def test_tensor_arithmetic(x, tensor_arithmetic_graph):
     expected = relu.sum()
     graph_input = GraphInput({"leaf1": x})
 
+    graph_input2 = GraphInput({"leaf1": x})
+
     assert g.compute(graph_input) == expected
     assert eq(g, graph_input, "relu", relu)
     assert eq(g, graph_input, "add", a)
     assert eq(g, graph_input, "h1", h1)
     assert eq(g, graph_input, "h2", h2)
+
+    assert g.compute(graph_input2) == expected
+    assert eq(g, graph_input2, "relu", relu)
+    assert eq(g, graph_input2, "add", a)
+    assert eq(g, graph_input2, "h1", h1)
+    assert eq(g, graph_input2, "h2", h2)
 
 def test_tensor_arithmetic_interv1(tensor_input1, tensor_arithmetic_graph):
     g = tensor_arithmetic_graph

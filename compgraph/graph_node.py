@@ -79,8 +79,8 @@ class GraphNode:
             self._children_dict = {c.name: c for c in self._children}
             return self._children_dict
 
-    def get_from_cache(self, inputs: Union[GraphInput, Intervention],
-                       from_interv: bool):
+    def _get_from_cache(self, inputs: Union[GraphInput, Intervention],
+                        from_interv: bool):
         if not self.cache_results: return None
 
         cache = self.interv_cache if from_interv else self.base_cache
@@ -93,15 +93,15 @@ class GraphNode:
             result = torch_utils.get_batch_from_cache(
                 inputs, cache, self.cache_device, output_device_dict)
         else:
-            result = cache.get(inputs, None)
+            result = cache.get(inputs.keys, None)
 
             if self.cache_device is not None:
-                output_device = output_device_dict[inputs]
+                output_device = output_device_dict[inputs.keys]
                 if output_device != self.cache_device:
                     return result.to(output_device)
         return result
 
-    def save_to_cache(self, inputs, result, to_interv):
+    def _save_to_cache(self, inputs, result, to_interv):
         if not self.cache_results or not inputs.cache_results:
             return
 
@@ -116,8 +116,8 @@ class GraphNode:
             if self.cache_device is not None:
                 if result.device != self.cache_device:
                     result_for_cache = result.to(self.cache_device)
-                output_device_dict[inputs] = result.device
-            cache[inputs] = result_for_cache
+                output_device_dict[inputs.keys] = result.device
+            cache[inputs.keys] = result_for_cache
 
     def compute(self, inputs):
         """Compute the output of a node
@@ -136,8 +136,8 @@ class GraphNode:
                                    "a graph before intervening")
             is_affected = self.name in intervention.affected_nodes
 
-        result = self.get_from_cache(intervention if is_affected else inputs,
-                                     is_affected)
+        result = self._get_from_cache(intervention if is_affected else inputs,
+                                      is_affected)
 
         if result is not None:
             return result
@@ -149,7 +149,7 @@ class GraphNode:
                     if not self.cache_results:
                         raise RuntimeError(f"Cannot intervene on node {self.name} "
                                            f"because its results are not cached")
-                    result = self.get_from_cache(inputs, from_interv=False)
+                    result = self._get_from_cache(inputs, from_interv=False)
                     if result is None:
                         raise RuntimeError(
                             f"Must compute result of node \"{self.name}\" without intervention once "
@@ -182,8 +182,8 @@ class GraphNode:
                         children_res.append(child_res)
                     result = self.forward(*children_res)
 
-            self.save_to_cache(intervention if is_affected else inputs,
-                               result, is_affected)
+            self._save_to_cache(intervention if is_affected else inputs,
+                                result, is_affected)
 
             return result
 

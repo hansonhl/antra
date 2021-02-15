@@ -38,3 +38,7 @@ def save_batch_to_cache(inputs, result, cache, cache_device, output_device_dict)
     else:
         raise RuntimeError(f"Does not support type {type(result_for_cache)} "
                            f"during computation for batch_dim={inputs.batch_dim}")
+
+
+def deserialize(x: tuple):
+    return torch.tensor(x)
