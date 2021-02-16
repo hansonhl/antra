@@ -44,9 +44,19 @@ class Intervention:
         self.affected_nodes = None
         self.batched = batched
         self.batch_dim = batch_dim
-        self.keys = keys
-        if batched and not self.keys:
+
+        if batched and not keys:
             raise ValueError("Must provide keys for each element of the batch!")
+        elif not batched:
+            keys = self._prepare_keys()
+
+        self.keys = keys
+
+    def _prepare_keys(self):
+        assert isinstance(self.base, GraphInput)
+        assert isinstance(self.intervention, GraphInput)
+        loc_key = tuple(sorted((k, Location.loc_to_str(v)) for k, v in self.location.items()))
+        return (self.base.keys, self.intervention.keys, loc_key)
 
     @classmethod
     def batched(cls, base: Union[Dict, GraphInput], keys: Sequence,
@@ -114,6 +124,8 @@ class Intervention:
     @intervention.setter
     def intervention(self, values):
         self._setup(intervention=values, location={})
+        if not self.batched:
+            self.keys = self._prepare_keys()
 
     @property
     def location(self):
@@ -122,17 +134,22 @@ class Intervention:
     @location.setter
     def location(self, values):
         self._setup(location=values)
+        if not self.batched:
+            self.keys = self._prepare_keys()
 
     def set_intervention(self, name, value):
         d = self._intervention.values if self._intervention is not None else {}
         d[name] = value
-        self._setup(intervention=d,
-                    location=None)  # do not overwrite existing locations
+        self._setup(intervention=d, location=None)  # do not overwrite existing locations
+        if not self.batched:
+            self.keys = self._prepare_keys()
 
     def set_location(self, name, value):
         d = self._location if self._location is not None else {}
         d[name] = value
         self._setup(location=d)
+        if not self.batched:
+            self.keys = self._prepare_keys()
 
     def __getitem__(self, name):
         return self._intervention.values[name]
