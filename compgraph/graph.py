@@ -9,6 +9,7 @@ from typing import Optional
 from collections import deque
 
 # TODO: add type hints
+# TODO: index of input keys to reduce cache space
 
 class ComputationGraph:
     def __init__(self, root: GraphNode, root_output_device=None):
@@ -154,30 +155,15 @@ class ComputationGraph:
                                    "in computation graph: %s" % name)
             # TODO: compare compatibility between shape of value and node
 
-    def compute(self, inputs, store_cache=True, iterative=False):
+    def compute(self, inputs):
         """
         Run forward pass through graph with a given set of inputs
 
         :param inputs:
-        :param store_cache:
         :return:
         """
         self.validate_inputs(inputs)
         return self.root.compute(inputs)
-        # result = self.get_from_cache(inputs)
-        # if not result:
-        #     self.validate_inputs(inputs)
-        #     if iterative:
-        #         result = self._iterative_compute(inputs)
-        #     else:
-        #         result = self.root.compute(inputs)
-        #
-        # if store_cache:
-        #     self.save_to_cache(inputs, result)
-        #
-        # if self.root_output_device:
-        #     result = result.to(self.root_output_device)
-        # return result
 
     def _iterative_compute(self, inputs):
         """
@@ -191,7 +177,7 @@ class ComputationGraph:
         """
         raise NotImplementedError
 
-    def intervene(self, intervention, store_cache=True):
+    def intervene(self, intervention):
         """
         Run intervention on computation graph.
 
@@ -206,12 +192,6 @@ class ComputationGraph:
 
         interv_res = self.root.compute(intervention)
 
-        # interv_res = self.get_from_cache(intervention)
-        # if not interv_res:
-        #     interv_res = self.root.compute(intervention)
-        #     if store_cache:
-        #         self.save_to_cache(intervention, interv_res)
-
         return base_res, interv_res
 
     def clear_caches(self):
@@ -221,12 +201,6 @@ class ComputationGraph:
                 clear_cache(c)
 
         clear_cache(self.root)
-        # del self.results_cache
-        # self.results_cache = {}
-        #
-        # if hasattr(self, "result_output_device_dict"):
-        #     del self.result_output_device_dict
-        #     self.result_output_device_dict = {}
 
     def compute_node(self, node_name, x):
         node = self.nodes[node_name]

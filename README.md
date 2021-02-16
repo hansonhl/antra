@@ -10,11 +10,11 @@ Install `compgraph` using `pip`:
 $ pip install compgraph
 ```
 
-`compgraph` is implemented using vanilla Python 3, and basic usage doesn't depend on other packages.
+`compgraph` is implemented using vanilla Python 3, and its basic usage doesn't depend on other packages.
 
 To utilize `compgraph`'s batch operations, please [install `pytorch`](https://pytorch.org/get-started/locally/)
 
-## Basic usage
+## Basic Usage
 
 `compgraph` supports defining a computation graph composed of computation nodes. Each node is either a *leaf*, which 
 serve as the input of the graph, or can be a function, which takes in the output values of other nodes as inputs, and 
@@ -22,8 +22,8 @@ returns a single value. The computation graph must be a directed acyclic graph, 
 which outputs the final result of the entire graph.
 
 Each node contains an internal dictionary that caches the result for different inputs, so that one can efficiently 
-retrieve intermediate values of the graph and perform interventions on the computation graph, at the expense
-of some memory space.
+retrieve intermediate values of the graph and perform interventions (see section below on interventions) 
+on the computation graph, at the expense of extra memory space.
 
 ### Defining a computation graph
 
@@ -39,8 +39,8 @@ batched computations.
 For instance, the following defines the nodes in the computation graph for the series of equations 
 
 ```
-node1 = x + y
-node2 = -1 * node1
+node1 = x * y   // element-wise product
+node2 = -1 * node1 + y
 root = node2.sum(dim=-1)
 ```
 
@@ -52,11 +52,11 @@ from compgraph import GraphNode, ComputationGraph
 x = GraphNode.leaf("x")
 y = GraphNode.leaf("y")
 
-node1_f = lambda x, y: x + y
+node1_f = lambda x, y: x * y
 node1 = GraphNode(x, y, name="node1", forward=node1_f)
 
-node2_f = lambda z: -1 * z
-node2 = GraphNode(node1, name="node2", forward=node2_f)
+node2_f = lambda z, y: -1 * z + y
+node2 = GraphNode(node1, y, name="node2", forward=node2_f)
 
 root_f = lambda r: r.sum(dim=-1)
 root = GraphNode(node2, name="root", forward=root_f)
@@ -70,6 +70,7 @@ children. **Note that the ordering of the node's children must be same as define
 Alternatively, as syntactic sugar, one can define computation graph nodes using decorators on functions:
 
 ```python
+import torch
 from compgraph import GraphNode, ComputationGraph
 
 x = GraphNode.leaf("x")
@@ -77,11 +78,11 @@ y = GraphNode.leaf("y")
 
 @GraphNode(x, y)
 def node1(x, y):
-    return x + y
+    return x * y
 
-@GraphNode(node1)
-def node2(z):
-    return -1 * z
+@GraphNode(node1, y)
+def node2(z, y):
+    return -1 * z + y
 
 @GraphNode(node2)
 def root(x):
@@ -102,46 +103,97 @@ The variable names for the function's parameters can be different from the child
 
 ### Basic computation
 
-Having defined the computation graph, one can run computations with it, by specifying the inputs to the graph using a
-`compgraph.GraphInput` object, and using the graph's `compute()` method. The `compute_node()` method computes the output
-value of a specific node in the graph.
+Having defined the computation graph, one can run computations with it by first specifying the inputs to the graph using a
+`compgraph.GraphInput` object, which provides the values of each leaf node in the graph.
+Then one can use the graph's `compute()` method to obtain the output value at the root node. 
+The `compute_node()` method computes the output value of a specific node in the graph.
 
 ```python
 import torch
 from compgraph import GraphInput
 # ...... g is the computation graph that is defined above
 
-input_dict = {"x": torch.tensor([10, 20, 30]), "y": torch.tensor([1, 1, 1])}
+input_dict = {"x": torch.tensor([10, 20, 30]), "y": torch.tensor([2, 2, 2])}
 in1 = GraphInput(input_dict)
 res = g.compute(in1)
-print(res)  # -63
+print(res)  # -114
 
 node1_res = g.compute_node("node1", in1)
-print(node1_res)  # tensor([11, 21, 31])
+print(node1_res)  # tensor([20, 40, 60])
 ```
 
 Because each node in the graph automatically caches its result on each input during `compute()`, calling `compute_node()`
-will retrieve the cached return value the key of the input (see section on value caching and keys below) and immediately 
-return it, without performing any extra computation.
+will retrieve the cached return value by looking up the input's key in an internal `dict` 
+(see section on value caching and keys below) and immediately return it, without performing any extra computation.
 
 Note that directly calling `compute_node()` on an intermediate node may only run the computation graph partially, and
 leave remaining downstream nodes uncomputed.
 
 ### Interventions
 
+The `compgraph` package supports *interventions* on the computation graph. An intervention on a computation graph is 
+essentially setting the output values of one or more intermediate nodes in the graph and computing the rest of the  
+nodes as usual, but with these altered intermediate values. Intervention experiments can be useful for 
+inferring the causal behavior of models. 
+
+An intervention requires a "base" input which provides the input values for all the leaf nodes, and values for 
+intervening on the intermediate nodes.
+
+For instance, using the same computation graph as above:
+```
+node1 = x * y     // element-wise product
+node2 = -1 * node1 + y
+root = node2.sum(dim=-1)
+```
+Suppose we first run the computation graph with inputs `x = [10, 20, 30], y = [1, 1, 1]` and get `node1 = [20, 40, 60]`, 
+`node2 = [-18, -38, -58]` and `root = -63`. 
+
+Suppose we want to ask what would happen if we set the value of `node1` to `[20, 20, 20]` during the computation. 
+This would be an intervention: when we compute `node2`, we use the newly set value of `node1` and the original value
+of `y` provided by the leaf input values, to get `node2 = [22, 22, 22]` and a new root value of `root = 66`.
+
+A `compgraph.Intervention` object has a `GraphInput` (or `dict` from leaf names to values) as its `base` input, and 
+another `GraphInput` (or `dict` from leaf names to values) specifying the intervention values.
+
+```python
+import torch
+from compgraph import GraphInput, Intervention
+
+input_dict = {"x": torch.tensor([10, 20, 30]), "y": torch.tensor([2, 2, 2])}
+in1 = GraphInput(input_dict)
+intervention_dict = {"node1": torch.tensor([20, 20, 20])}
+in2 = GraphInput(intervention_dict)
+
+# the following are equivalent:
+
+interv1 = Intervention(in1, intervention_dict)
+interv1 = Intervention(in1, in2)
+interv1 = Intervention(input_dict, intervention_dict)
+interv1 = Intervention(input_dict, in2)
+```
+
+Performing the intervention on the graph, and retrieving intermediate node values during the intervention:
+
+```python
+base_result, interv_result = g.intervene(interv1)
+print(base_result, interv_result) # -63, 66
+
+node2_interv_value = g.compute_node("node2", interv1)
+print(node2_interv_value) # tensor([22,22,22])
+```
 
 ### Value caching and keys
 
 
 ### Caching control
 
-Prevent a computation from caching a result on a certain input:
+**Prevent a computation from caching a result on a certain input**
 
 ```python
 in1 = GraphInput(input_dict, cache_results=False)
 ```
 
-To prevent a node in the graph from caching results in general:
+**Prevent a node in the graph from caching results in general**
 
 ```python
 node1_f = lambda x, y: x + y
@@ -156,13 +208,18 @@ def node1(x, y):
 # --- or ---
 node1.cache_results = False
 ```
-
 It is recommended to do this for nodes whose output values you are not interested in obtaining, or nodes that will not
 be intervened on.
 
+**Prevent caching results during an intervention**
 
-### Batched computation and intervention
+```python
+interv1 = Intervention(input_dict, intervention_dict, cache_results=False, cache_base_results=False)
+```
 
 
-### Abstracted computation graphs
+## Batched computation and intervention
+
+
+## Abstracted computation graphs
 
