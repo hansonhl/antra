@@ -2,6 +2,20 @@
 
 Lightweight package for defining computation graphs and performing intervention experiments
 
+Table of Contents
+=================
+
+   * [compgraph](#compgraph)
+      * [Installation and dependencies](#installation-and-dependencies)
+      * [Basic Usage](#basic-usage)
+         * [Defining a computation graph](#defining-a-computation-graph)
+         * [Basic computation](#basic-computation)
+         * [Interventions](#interventions)
+         * [Value caching and keys](#value-caching-and-keys)
+         * [Caching control](#caching-control)
+      * [Batched computation and intervention](#batched-computation-and-intervention)
+      * [Abstracted computation graphs](#abstracted-computation-graphs)
+
 ## Installation and dependencies
 
 Install `compgraph` using `pip`:
@@ -191,6 +205,7 @@ print(node2_interv_value) # tensor([22,22,22])
 
 ```python
 in1 = GraphInput(input_dict, cache_results=False)
+_ = g.compute(in1)   # intermediate values won't be cached
 ```
 
 **Prevent a node in the graph from caching results in general**
@@ -215,6 +230,7 @@ be intervened on.
 
 ```python
 interv1 = Intervention(input_dict, intervention_dict, cache_results=False, cache_base_results=False)
+_, _ = g.intervene(interv1)
 ```
 
 
