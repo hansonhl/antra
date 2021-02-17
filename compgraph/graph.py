@@ -12,7 +12,7 @@ from collections import deque
 # TODO: index of input keys to reduce cache space
 
 class ComputationGraph:
-    def __init__(self, root: GraphNode, root_output_device=None):
+    def __init__(self, root: GraphNode):
         """
         Constructs a computation graph by traversing from a root
         :param root: Root node
@@ -22,38 +22,6 @@ class ComputationGraph:
         self.root = root
         self.nodes = {}
         self.leaves = self.validate_graph()
-
-        # self.root_output_device = root_output_device
-        # self.cache_device = None
-
-    # def get_from_cache(self, inputs):
-    #     if inputs.batched: return None
-    #
-    #     result = self.results_cache.get(inputs, None)
-    #     if self.cache_device is not None:
-    #         output_device = self.result_output_device_dict[inputs]
-    #         if output_device != self.cache_device:
-    #             return result.to(output_device)
-    #     return result
-    #
-    # def save_to_cache(self, inputs, result):
-    #     if not inputs.cache_results or inputs.batched:
-    #         return
-    #
-    #     result_for_cache = result
-    #     if self.cache_device is not None:
-    #         if result.device != self.cache_device:
-    #             result_for_cache = result.to(self.cache_device)
-    #         self.result_output_device_dict[inputs] = result.device
-    #
-    #     self.results_cache[inputs] = result_for_cache
-    #
-    # def set_cache_device(self, cache_device):
-    #     self.cache_device = cache_device
-    #     self.result_output_device_dict = {}
-    #
-    #     for node in self.nodes.values():
-    #         node.cache_device = cache_device
 
     def get_nodes_and_dependencies(self):
         nodes = [node_name for node_name in self.nodes]

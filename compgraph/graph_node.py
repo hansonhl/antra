@@ -60,7 +60,7 @@ class GraphNode:
 
     @classmethod
     def leaf(cls, name: str):
-        return cls(name=name, forward=lambda x: x)
+        return cls(name=name, forward=lambda x: x, cache_results=False)
 
     @property
     def children(self):
