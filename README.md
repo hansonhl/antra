@@ -42,15 +42,22 @@ on the computation graph, at the expense of extra memory space.
 ### Defining a computation graph
 
 To define a computation graph, first define the nodes in it using `compgraph.GraphNode` by specifying each node's `name`,
-and for non-leaf nodes, its function (called its `forward` function), and its children, which are the nodes whose outputs 
-are the inputs of the forward function.
+and for non-leaf nodes, its function (called its `forward` function) and its children nodes, who provide input values
+to the function's arguments.
 
-After defining the nodes, pass in the root node to the `compgraph.ComputationGraph` constructor.
+After defining the nodes, pass in the root node to the `compgraph.ComputationGraph` constructor, to construct the 
+computation graph.
 
-The `compgraph` package is agnostic to the input and output types of each node's functions, unless working with 
-batched computations.
+`compgraph` is agnostic to the input and output types of each node's functions, unless working with 
+batched computations and interventions, which currently requires `pytorch`.
 
-For instance, the following defines the nodes in the computation graph for the series of equations 
+In the following we use an example to explain how to construct a computation graph using `compgraph`.
+
+For instance, suppose we have the following graph that takes in two vectors `x` and `y` as inputs:
+
+![example computation graph](example_compgraph.png)
+
+Which can be expressed in equations as:
 
 ```
 node1 = x * y   // element-wise product
@@ -58,7 +65,7 @@ node2 = -1 * node1 + y
 root = node2.sum(dim=-1)
 ```
 
-where x, y are `pytorch` tensors.
+We can define the graph using `compgraph` as:
 
 ```python
 from compgraph import GraphNode, ComputationGraph
@@ -84,7 +91,6 @@ children. **Note that the ordering of the node's children must be same as define
 Alternatively, as syntactic sugar, one can define computation graph nodes using decorators on functions:
 
 ```python
-import torch
 from compgraph import GraphNode, ComputationGraph
 
 x = GraphNode.leaf("x")
@@ -108,12 +114,14 @@ print(node1.children) # [GraphNode("x"), GraphNode("y")]
 g = ComputationGraph(root)
 ```
 
-The above is equivalent to the previous method. The decorator `@GraphNode()` takes in an arbitrary number of child nodes 
-as the node's arguments, and will automatically treat the function that it decorates as node's `forward` function. Same
-as the previous method, *the ordering of the children in the decorator arguments must be same as defined in the function*.
-Finally, the node's name will be the string that is same as function's name.
+The above is equivalent to the previous method. The decorator `@GraphNode()` takes in an arbitrary number of `GraphNode`
+objects that are the current node's children, and will make the function that it decorates as the `forward` function. 
+Similar to the previous method, **the ordering of the children in the `@GraphNode()` must match the order of arguments
+in the function**. Finally, the decorator will take the function name to be the node's name, and the function now becomes
+a `GraphNode` object that can be used in the remainder of the code.
 
-The variable names for the function's parameters can be different from the child node names that appear in the decorator.
+Note that the *variable names* of the function's arguments can be different from the child node names 
+that appear in the decorator.
 
 ### Basic computation
 
@@ -159,15 +167,21 @@ node1 = x * y     // element-wise product
 node2 = -1 * node1 + y
 root = node2.sum(dim=-1)
 ```
-Suppose we first run the computation graph with inputs `x = [10, 20, 30], y = [1, 1, 1]` and get `node1 = [20, 40, 60]`, 
-`node2 = [-18, -38, -58]` and `root = -63`. 
+Suppose we first run the computation graph with inputs `x = [10, 20, 30], y = [2, 2, 2]` and get `node1 = [20, 40, 60]`, 
+`node2 = [-18, -38, -58]` and `root = -114`. 
 
-Suppose we want to ask what would happen if we set the value of `node1` to `[20, 20, 20]` during the computation. 
-This would be an intervention: when we compute `node2`, we use the newly set value of `node1` and the original value
-of `y` provided by the leaf input values, to get `node2 = [22, 22, 22]` and a new root value of `root = 66`.
+Suppose we want to ask what would happen if we set the value of `node1` to `[-20, -20, -20]` during the computation, 
+ignoring the result of `x * y`.
 
-A `compgraph.Intervention` object has a `GraphInput` (or `dict` from leaf names to values) as its `base` input, and 
-another `GraphInput` (or `dict` from leaf names to values) specifying the intervention values.
+This would be an intervention: when we compute `node2`, we set `node1 = [-20, -20, -20]` and the input value
+`y = [2, 2, 2]` , to get `node2 = [22, 22, 22]` and subsequently `root = 66`.
+
+To perform the above intervention using `compgraph`, we define a `compgraph.Intervention` object.
+It requires a `GraphInput` object as its "base" input, and another `GraphInput` specifying the intervention values.
+These `GraphInput` objects can be substituted with a `dict` mapping from node names to values.
+
+`compgraph` can detect which nodes in the computation graph are affected by the intervention, so that it does not
+compute parts of the graph whose results are going to be unused (such as `x * y` in the above case) due to the intervention.
 
 ```python
 import torch
@@ -175,7 +189,7 @@ from compgraph import GraphInput, Intervention
 
 input_dict = {"x": torch.tensor([10, 20, 30]), "y": torch.tensor([2, 2, 2])}
 in1 = GraphInput(input_dict)
-intervention_dict = {"node1": torch.tensor([20, 20, 20])}
+intervention_dict = {"node1": torch.tensor([-20, -20, -20])}
 in2 = GraphInput(intervention_dict)
 
 # the following are equivalent:
@@ -214,7 +228,7 @@ _ = g.compute(in1)   # intermediate values won't be cached
 node1_f = lambda x, y: x + y
 node1 = GraphNode(x, y, name="node1", forward=node1_f, cache_results=False)
 
-# --- or ---
+# --- or ---W
 
 @GraphNode(x, y, cache_results=False)
 def node1(x, y):
