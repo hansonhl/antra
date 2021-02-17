@@ -5,7 +5,7 @@ from .graph_node import GraphNode
 from .graph_input import GraphInput
 from .location import Location
 
-from typing import Optional
+from typing import Dict, Any, Union
 from collections import deque
 
 # TODO: add type hints
@@ -96,7 +96,7 @@ class ComputationGraph:
         add_node(self.root)
         return leaves
 
-    def validate_inputs(self, inputs):
+    def validate_inputs(self, inputs: GraphInput):
         """
         Check if an input is provided for each leaf node
         :raise: `RuntimeError` if something goes wrong
@@ -106,7 +106,7 @@ class ComputationGraph:
                 raise RuntimeError(
                     "input value not provided for leaf node %s" % node.name)
 
-    def validate_interv(self, intervention):
+    def validate_interv(self, intervention: Intervention):
         """
         Validates an experiment relevant to this `ComputationGraph`
         :param intervention:  intervention experiment in question
@@ -123,7 +123,7 @@ class ComputationGraph:
                                    "in computation graph: %s" % name)
             # TODO: compare compatibility between shape of value and node
 
-    def compute(self, inputs):
+    def compute(self, inputs: GraphInput):
         """
         Run forward pass through graph with a given set of inputs
 
@@ -133,7 +133,7 @@ class ComputationGraph:
         self.validate_inputs(inputs)
         return self.root.compute(inputs)
 
-    def _iterative_compute(self, inputs):
+    def _iterative_compute(self, inputs: GraphInput):
         """
         stack = deque()
         stack.append(self.root)
@@ -145,7 +145,7 @@ class ComputationGraph:
         """
         raise NotImplementedError
 
-    def intervene(self, intervention):
+    def intervene(self, intervention: Intervention):
         """
         Run intervention on computation graph.
 
@@ -170,7 +170,7 @@ class ComputationGraph:
 
         clear_cache(self.root)
 
-    def compute_node(self, node_name, x):
+    def compute_node(self, node_name: str, x: Union[GraphInput, Intervention]):
         node = self.nodes[node_name]
         res = None
 

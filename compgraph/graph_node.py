@@ -12,16 +12,18 @@ if "torch" in sys.modules:
 # TODO: add type hints
 
 class GraphNode:
-    def __init__(self, *args, name: str=None, forward: Callable=None, cache_results=True):
+    def __init__(self, *args, name: str=None, forward: Callable=None, cache_results: bool=True):
         """Construct a computation graph node, can be used as function decorator
 
         This constructor is invoked when `@GraphNode()` decorates a function.
         When used as a decorator, the `*args` become parameters of the decorator
 
-        :param args: other GraphNode objects that are the children of this node
+        :param args: GraphNode objects that are the children of this node
         :param name: the name of the node. If not given, this will be the name
             of the function that it decorates by default
         :param forward: the name of the forward function
+        :param cache_results: whether this node caches results. Cannot perform
+            interventions
         """
         self.children = args
         self.cache_results = cache_results
@@ -60,6 +62,7 @@ class GraphNode:
 
     @classmethod
     def leaf(cls, name: str):
+        """Construct a leaf node with a given name."""
         return cls(name=name, forward=lambda x: x, cache_results=False)
 
     @property
@@ -119,11 +122,11 @@ class GraphNode:
                 output_device_dict[inputs.keys] = result.device
             cache[inputs.keys] = result_for_cache
 
-    def compute(self, inputs):
+    def compute(self, inputs: Union[GraphInput, Intervention]):
         """Compute the output of a node
 
         :param inputs: Can be a GraphInput object or an Intervention object
-        :return:
+        :return: result of forward function
         """
         # check if intervention is happening in this run
         intervention = None
@@ -188,6 +191,7 @@ class GraphNode:
             return result
 
     def clear_caches(self):
+        """Clear all caches"""
         if hasattr(self, "base_cache"):
             del self.base_cache
             self.base_cache = {}
