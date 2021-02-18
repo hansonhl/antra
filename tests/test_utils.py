@@ -1,8 +1,8 @@
 import pytest
 import torch
 
-from compgraph.utils import serialize
-from compgraph.torch_utils import deserialize
+from antra.utils import serialize
+from antra.torch_utils import deserialize
 
 dataset = [torch.tensor(1.),
            torch.tensor([1.]),

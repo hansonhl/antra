@@ -1,5 +1,5 @@
 import torch
-from compgraph import *
+from antra import *
 
 
 if __name__ == "__main__":

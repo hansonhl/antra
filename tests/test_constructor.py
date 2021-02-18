@@ -1,6 +1,6 @@
 import torch
 import pytest
-from compgraph import CompGraphConstructor
+from antra import CompGraphConstructor
 
 
 def has_child(g, parent_node, child_node):

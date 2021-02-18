@@ -1,6 +1,6 @@
 import pytest
 import torch
-from compgraph import GraphInput
+from antra import GraphInput
 
 
 

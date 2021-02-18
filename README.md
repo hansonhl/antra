@@ -1,11 +1,11 @@
-# compgraph
+# antra
 
 Lightweight package for defining computation graphs and performing intervention experiments
 
 Table of Contents
 =================
 
-   * [compgraph](#compgraph)
+   * [antra](#antra)
       * [Installation and dependencies](#installation-and-dependencies)
       * [Basic Usage](#basic-usage)
          * [Defining a computation graph](#defining-a-computation-graph)
@@ -18,19 +18,19 @@ Table of Contents
 
 ## Installation and dependencies
 
-Install `compgraph` using `pip`:
+Install `antra` using `pip`:
 
 ```
-$ pip install compgraph
+$ pip install antra
 ```
 
-`compgraph` is implemented using vanilla Python 3, and its basic usage doesn't depend on other packages.
+`antra` is implemented using vanilla Python 3, and its basic usage doesn't depend on other packages.
 
-To utilize `compgraph`'s batch operations, please [install `pytorch`](https://pytorch.org/get-started/locally/)
+To utilize `antra`'s batch operations, please [install `pytorch`](https://pytorch.org/get-started/locally/)
 
 ## Basic Usage
 
-`compgraph` supports defining a computation graph composed of computation nodes. Each node is either a *leaf*, which 
+`antra` supports defining a computation graph composed of computation nodes. Each node is either a *leaf*, which 
 serve as the input of the graph, or can be a function, which takes in the output values of other nodes as inputs, and 
 returns a single value. The computation graph must be a directed acyclic graph, and must have one single *root* node
 which outputs the final result of the entire graph.
@@ -41,17 +41,17 @@ on the computation graph, at the expense of extra memory space.
 
 ### Defining a computation graph
 
-To define a computation graph, first define the nodes in it using `compgraph.GraphNode` by specifying each node's `name`,
+To define a computation graph, first define the nodes in it using `antra.GraphNode` by specifying each node's `name`,
 and for non-leaf nodes, its function (called its `forward` function) and its children nodes, who provide input values
 to the function's arguments.
 
-After defining the nodes, pass in the root node to the `compgraph.ComputationGraph` constructor, to construct the 
+After defining the nodes, pass in the root node to the `antra.ComputationGraph` constructor, to construct the 
 computation graph.
 
-`compgraph` is agnostic to the input and output types of each node's functions, unless working with 
+`antra` is agnostic to the input and output types of each node's functions, unless working with 
 batched computations and interventions, which currently requires `pytorch`.
 
-In the following we use an example to explain how to construct a computation graph using `compgraph`.
+In the following we use an example to explain how to construct a computation graph using `antra`.
 
 For instance, suppose we have the following graph that takes in two vectors `x` and `y` as inputs:
 
@@ -65,10 +65,10 @@ node2 = -1 * node1 + y
 root = node2.sum(dim=-1)
 ```
 
-We can define the graph using `compgraph` as:
+We can define the graph using `antra` as:
 
 ```python
-from compgraph import GraphNode, ComputationGraph
+from antra import GraphNode, ComputationGraph
 
 x = GraphNode.leaf("x")
 y = GraphNode.leaf("y")
@@ -91,7 +91,7 @@ children. **Note that the ordering of the node's children must be same as define
 Alternatively, as syntactic sugar, one can define computation graph nodes using decorators on functions:
 
 ```python
-from compgraph import GraphNode, ComputationGraph
+from antra import GraphNode, ComputationGraph
 
 x = GraphNode.leaf("x")
 y = GraphNode.leaf("y")
@@ -126,13 +126,13 @@ that appear in the decorator.
 ### Basic computation
 
 Having defined the computation graph, one can run computations with it by first specifying the inputs to the graph using a
-`compgraph.GraphInput` object, which provides the values of each leaf node in the graph.
+`antra.GraphInput` object, which provides the values of each leaf node in the graph.
 Then one can use the graph's `compute()` method to obtain the output value at the root node. 
 The `compute_node()` method computes the output value of a specific node in the graph.
 
 ```python
 import torch
-from compgraph import GraphInput
+from antra import GraphInput
 # ...... g is the computation graph that is defined above
 
 input_dict = {"x": torch.tensor([10, 20, 30]), "y": torch.tensor([2, 2, 2])}
@@ -153,7 +153,7 @@ leave remaining downstream nodes uncomputed.
 
 ### Interventions
 
-The `compgraph` package supports *interventions* on the computation graph. An intervention on a computation graph is 
+The `antra` package supports *interventions* on the computation graph. An intervention on a computation graph is 
 essentially setting the output values of one or more intermediate nodes in the graph and computing the rest of the  
 nodes as usual, but with these altered intermediate values. Intervention experiments can be useful for 
 inferring the causal behavior of models. 
@@ -176,16 +176,16 @@ ignoring the result of `x * y`.
 This would be an intervention: when we compute `node2`, we set `node1 = [-20, -20, -20]` and the input value
 `y = [2, 2, 2]` , to get `node2 = [22, 22, 22]` and subsequently `root = 66`.
 
-To perform the above intervention using `compgraph`, we define a `compgraph.Intervention` object.
+To perform the above intervention using `antra`, we define a `antra.Intervention` object.
 It requires a `GraphInput` object as its "base" input, and another `GraphInput` specifying the intervention values.
 These `GraphInput` objects can be substituted with a `dict` mapping from node names to values.
 
-`compgraph` can detect which nodes in the computation graph are affected by the intervention, so that it does not
+`antra` can detect which nodes in the computation graph are affected by the intervention, so that it does not
 compute parts of the graph whose results are going to be unused (such as `x * y` in the above case) due to the intervention.
 
 ```python
 import torch
-from compgraph import GraphInput, Intervention
+from antra import GraphInput, Intervention
 
 input_dict = {"x": torch.tensor([10, 20, 30]), "y": torch.tensor([2, 2, 2])}
 in1 = GraphInput(input_dict)

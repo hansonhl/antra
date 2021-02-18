@@ -1,5 +1,5 @@
 import pytest
-from compgraph.abstractable import AbstractableCompGraph
+from antra.abstractable import AbstractableCompGraph
 
 graph_1 = {"A": ["B", "C"],
            "B": ["E"],

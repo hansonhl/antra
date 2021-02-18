@@ -10,7 +10,7 @@ class AbstractableCompGraph(ComputationGraph):
                  forward_functions: Dict[str, Callable],
                  topological_order: List[str]=None,
                  root_output_device=None):
-        """ An abstractable compgraph structure.
+        """ An abstractable antra structure.
 
         :param full_graph: A dict describing the structure of a computation
             graph, mapping name of each parent node to list of names of children
@@ -91,7 +91,7 @@ class AbstractableCompGraph(ComputationGraph):
         return node_dict[self.root_node_name]
 
     def get_node_names(self, abstract_nodes: List[str]) -> List[str]:
-        """ Get topologically ordered list of node names in final compgraph,
+        """ Get topologically ordered list of node names in final antra,
         given intermediate nodes"""
         abstract_nodes = set(abstract_nodes)
         if self.root_node_name not in abstract_nodes:

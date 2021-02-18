@@ -4,14 +4,14 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="compgraph",
+    name="antra",
     version="0.0.1",
     author="Hanson Lu",
     author_email="hansonlu.hl@gmail.com",
     description="Lightweight package for defining computation graphs and performing intervention experiments",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/hansonhl/compgraph",
+    url="https://github.com/hansonhl/antra",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

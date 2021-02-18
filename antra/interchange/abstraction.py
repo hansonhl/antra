@@ -3,10 +3,10 @@
 # It is duplicated here to support old pickled experiment result files.
 
 import copy
-from compgraph import Intervention
-from compgraph.interchange.mapping import create_possible_mappings
-from compgraph.utils import serialize
-from compgraph.torch_utils import deserialize
+from antra import Intervention
+from antra.interchange.mapping import create_possible_mappings
+from antra.utils import serialize
+from antra.torch_utils import deserialize
 
 
 def get_value(high_model, high_node, high_intervention):

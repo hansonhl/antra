@@ -7,7 +7,7 @@ from .utils import copy_helper
 from typing import Union, Callable, Dict
 
 if "torch" in sys.modules:
-    import compgraph.torch_utils as torch_utils
+    import antra.torch_utils as torch_utils
 
 # TODO: add type hints
 

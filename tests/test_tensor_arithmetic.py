@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from compgraph import ComputationGraph, GraphNode, GraphInput, Intervention, LOC
+from antra import ComputationGraph, GraphNode, GraphInput, Intervention, LOC
 
 def eq(g, input, node_name, other):
     return torch.all(g.compute_node(node_name, input) == other)

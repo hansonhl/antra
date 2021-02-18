@@ -1,5 +1,5 @@
-from compgraph import ComputationGraph, GraphNode, Location
-from compgraph.interchange.mapping import create_possible_mappings
+from antra import ComputationGraph, GraphNode, Location
+from antra.interchange.mapping import create_possible_mappings
 
 
 class BooleanLogicProgram(ComputationGraph):
