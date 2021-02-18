@@ -43,9 +43,12 @@ Each node in the computation graph contains an internal `dict` that caches
 the result for different inputs, making it efficient to access intermediate values in the graph and intervene on the 
 computation graph, at the expense of extra memory space.
 
-`antra` is lightweight and flexible. It is agnostic to the input and output types of each node's functions. 
-Optionally, if you have `pytorch` installed, `antra` can perform computations and interventions in batches, 
-which is useful for analyzing numerically intensive systems such as neural networks.
+`antra` is lightweight and flexible. It is agnostic to the input and output types as well as the content
+of each node's functions. Optionally, if you have `pytorch` installed, `antra` can perform computations 
+and interventions in batches, which is useful for analyzing numerically intensive systems such as neural networks.
+
+Note that `antra`'s primary purpose is to provide a lightweight scaffolding to convert an algorithm/program/computation process
+into a computation graph and perform interventions on it. It does not perform back-propogation on its own.
 
 ## Defining a computation graph
 
@@ -89,8 +92,6 @@ root = GraphNode(node2, name="root", forward=root_f)
 
 g = ComputationGraph(root)
 ```
-
-This is in a way similar to `tensorflow`, where users define a computation graph statically. In the above,
 Note that the `GraphNode` constructor takes in an arbitrary number of positional arguments that serve as its
 children. **Note that the ordering of the node's children must be same as defined in the function**.
 
