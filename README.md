@@ -30,16 +30,24 @@ To utilize `antra`'s batch operations, please [install `pytorch`](https://pytorc
 
 ## Basic Usage
 
-`antra` supports defining a computation graph composed of computation nodes. Each node is either a *leaf*, which 
-serve as the input of the graph, or can be a function, which takes in the output values of other nodes as inputs, and 
-returns a single value. The computation graph must be a directed acyclic graph, and must have one single *root* node
-which outputs the final result of the entire graph.
+`antra`'s main functionality is to perform efficient interventions on computation processes, which is
+essential for the causal analysis of a program or algorithm (see [section below](#interventions) on interventions).
 
-Each node contains an internal dictionary that caches the result for different inputs, so that one can efficiently 
-retrieve intermediate values of the graph and perform interventions (see section below on interventions) 
-on the computation graph, at the expense of extra memory space.
+Using `antra`, users can declaratively construct a computation graph that implements a computation process of interest. 
+The computation graph contains nodes, which can either be a *leaf*, which serve as the input points of the graph, 
+or can represent a function, which takes in the output values of other nodes as inputs and returns a  value. 
+The computation graph must be a directed acyclic graph, and must have one single *root* node which outputs the final result of 
+the entire graph.
 
-### Defining a computation graph
+Each node in the computation graph contains an internal `dict` that caches 
+the result for different inputs, making it efficient to access intermediate values in the graph and intervene on the 
+computation graph, at the expense of extra memory space.
+
+`antra` is lightweight and flexible. It is agnostic to the input and output types of each node's functions. 
+Optionally, if you have `pytorch` installed, `antra` can perform computations and interventions in batches, 
+which is useful for analyzing numerically intensive systems such as neural networks.
+
+## Defining a computation graph
 
 To define a computation graph, first define the nodes in it using `antra.GraphNode` by specifying each node's `name`,
 and for non-leaf nodes, its function (called its `forward` function) and its children nodes, who provide input values
@@ -47,9 +55,6 @@ to the function's arguments.
 
 After defining the nodes, pass in the root node to the `antra.ComputationGraph` constructor, to construct the 
 computation graph.
-
-`antra` is agnostic to the input and output types of each node's functions, unless working with 
-batched computations and interventions, which currently requires `pytorch`.
 
 In the following we use an example to explain how to construct a computation graph using `antra`.
 
@@ -85,7 +90,8 @@ root = GraphNode(node2, name="root", forward=root_f)
 g = ComputationGraph(root)
 ```
 
-The `GraphNode` constructor takes in an arbitrary number of positional arguments that serve as its
+This is in a way similar to `tensorflow`, where users define a computation graph statically. In the above,
+Note that the `GraphNode` constructor takes in an arbitrary number of positional arguments that serve as its
 children. **Note that the ordering of the node's children must be same as defined in the function**.
 
 Alternatively, as syntactic sugar, one can define computation graph nodes using decorators on functions:
@@ -123,7 +129,7 @@ a `GraphNode` object that can be used in the remainder of the code.
 Note that the *variable names* of the function's arguments can be different from the child node names 
 that appear in the decorator.
 
-### Basic computation
+## Basic computation
 
 Having defined the computation graph, one can run computations with it by first specifying the inputs to the graph using a
 `antra.GraphInput` object, which provides the values of each leaf node in the graph.
@@ -151,7 +157,7 @@ will retrieve the cached return value by looking up the input's key in an intern
 Note that directly calling `compute_node()` on an intermediate node may only run the computation graph partially, and
 leave remaining downstream nodes uncomputed.
 
-### Interventions
+## Interventions
 
 The `antra` package supports *interventions* on the computation graph. An intervention on a computation graph is 
 essentially setting the output values of one or more intermediate nodes in the graph and computing the rest of the  
@@ -210,10 +216,11 @@ node2_interv_value = g.compute_node("node2", interv1)
 print(node2_interv_value) # tensor([22,22,22])
 ```
 
-### Value caching and keys
+## Indexing and slicing for interventions on vectors/tensors
 
+## Value caching and keys
 
-### Caching control
+## Caching control
 
 **Prevent a computation from caching a result on a certain input**
 
