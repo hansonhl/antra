@@ -2,8 +2,7 @@
 
 Lightweight package for defining computation graphs and performing intervention experiments
 
-Table of Contents
-=================
+## Table of Contents
 
    * [antra](#antra)
       * [Installation and dependencies](#installation-and-dependencies)
