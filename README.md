@@ -5,15 +5,24 @@ Lightweight package for defining computation graphs and performing intervention 
 ## Table of Contents
 
    * [antra](#antra)
+      * [Table of Contents](#table-of-contents)
       * [Installation and dependencies](#installation-and-dependencies)
       * [Basic Usage](#basic-usage)
-         * [Defining a computation graph](#defining-a-computation-graph)
-         * [Basic computation](#basic-computation)
-         * [Interventions](#interventions)
-         * [Value caching and keys](#value-caching-and-keys)
-         * [Caching control](#caching-control)
+      * [Defining a computation graph](#defining-a-computation-graph)
+      * [Basic computation](#basic-computation)
+      * [Interventions](#interventions)
+         * [Setting up an intervention](#setting-up-an-intervention)
+         * [Computing the intervention](#computing-the-intervention)
+      * [Interventions on specific indices and slices of vectors/tensors](#interventions-on-specific-indices-and-slices-of-vectorstensors)
+         * [Specifying intervention location as a string](#specifying-intervention-location-as-a-string)
+         * [Specifying intervention location using the LOC object](#specifying-intervention-location-using-the-loc-object)
+         * [Computing interventions with specified indexing location](#computing-interventions-with-specified-indexing-location)
+         * [How this works under the hood](#how-this-works-under-the-hood)
       * [Batched computation and intervention](#batched-computation-and-intervention)
+      * [Value caching and keys](#value-caching-and-keys)
+      * [Caching control](#caching-control)
       * [Abstracted computation graphs](#abstracted-computation-graphs)
+
 
 ## Installation and dependencies
 
@@ -174,7 +183,7 @@ node2 = -1 * node1 + y
 root = node2.sum(dim=-1)
 ```
 Suppose we first run the computation graph with inputs `x = [10, 20, 30], y = [2, 2, 2]` and get `node1 = [20, 40, 60]`, 
-`node2 = [-18, -38, -58]` and `root = -114`. 
+`node2 = [-18, -38, -58]` and `root = -114`. This will be the "base" input.
 
 Suppose we want to ask what would happen if we set the value of `node1` to `[-20, -20, -20]` during the computation, 
 ignoring the result of `x * y`.
@@ -182,41 +191,147 @@ ignoring the result of `x * y`.
 This would be an intervention: when we compute `node2`, we set `node1 = [-20, -20, -20]` and the input value
 `y = [2, 2, 2]` , to get `node2 = [22, 22, 22]` and subsequently `root = 66`.
 
-To perform the above intervention using `antra`, we define a `antra.Intervention` object.
-It requires a `GraphInput` object as its "base" input, and another `GraphInput` specifying the intervention values.
-These `GraphInput` objects can be substituted with a `dict` mapping from node names to values.
+### Setting up an intervention
+To perform the above intervention using `antra`, we construct a `antra.Intervention` object. `antra` allows many 
+alternative ways to do this.
 
-`antra` can detect which nodes in the computation graph are affected by the intervention, so that it does not
-compute parts of the graph whose results are going to be unused (such as `x * y` in the above case) due to the intervention.
+An intervention object requires a base input and the intervention itself, both of which being a mapping from (leaf) node names 
+to numeric values. This mapping can be given either using a `dict` or a `GraphInput` object that wraps around it.
 
 ```python
 import torch
 from antra import GraphInput, Intervention
 
-input_dict = {"x": torch.tensor([10, 20, 30]), "y": torch.tensor([2, 2, 2])}
-in1 = GraphInput(input_dict)
+base_input_dict = {"x": torch.tensor([10, 20, 30]), "y": torch.tensor([2, 2, 2])}
+base_input_gi_obj = GraphInput(base_input_dict)
 intervention_dict = {"node1": torch.tensor([-20, -20, -20])}
-in2 = GraphInput(intervention_dict)
+intervention_gi_obj = GraphInput(intervention_dict)
 
 # the following are equivalent:
 
-interv1 = Intervention(in1, intervention_dict)
-interv1 = Intervention(in1, in2)
-interv1 = Intervention(input_dict, intervention_dict)
-interv1 = Intervention(input_dict, in2)
+interv = Intervention(base_input_gi_obj, intervention_dict)
+interv = Intervention(base_input_gi_obj, intervention_gi_obj)
+interv = Intervention(base_input_dict, intervention_dict)
+interv = Intervention(base_input_dict, intervention_gi_obj)
 ```
-
-Performing the intervention on the graph, and retrieving intermediate node values during the intervention:
-
+Another alternative is to specify the intervened nodes and values separately using the `set_intervention()` method,
+which makes code more readable, instead of packing everything into the constructor function.
 ```python
-base_result, interv_result = g.intervene(interv1)
-print(base_result, interv_result) # -63, 66
-
-node2_interv_value = g.compute_node("node2", interv1)
-print(node2_interv_value) # tensor([22,22,22])
+interv1 = Intervention(base_input_gi_obj)
+interv1.set_intervention("node1", torch.tensor([-20, -20, -20]))
 ```
 
-## Indexing and slicing for interventions on vectors/tensors
+### Computing the intervention
+
+Use the `g.intervene()` method to performing the intervention on the graph. It returns two root outputs, computed
+without and with the intervention respectively.
+```python
+base_result, interv_result = g.intervene(interv)
+print(base_result, interv_result) # -63, 66
+```
+To retrieving intermediate node values during the intervention, use `g.compute_node()`, which takes in a node name and 
+an `Intervention` object. You can also retrieve the intermediate node value computed without the intervention by passing
+in the `GraphInput` object of the intervention's base input.
+```python
+node2_interv_value = g.compute_node("node2", interv)
+print(node2_interv_value) # tensor([22,22,22])
+
+# the following are equivalent
+node2_base_value = g.compute_node("node2", base_input_gi_obj) # base_input_gi_obj defined above
+node2_base_value = g.compute_node("node2", interv.base) 
+print(node2_base_value) # tensor([20, 40, 60])
+```
+
+Note that `antra` can detect which nodes in the computation graph are affected by the intervention, so that it does not
+compute parts of the graph whose results are going to be unused (such as `x * y` in the above case) due to the intervention.
+
+
+## Interventions on specific indices and slices of vectors/tensors
+
+You can intervene on only specific elements or slices of vectors and tensors using `antra` by specifying an array index as you
+would normally do using square brackets `[]`.
+
+Using the same example as above,
+```
+node1 = x * y     // element-wise product
+node2 = -1 * node1 + y
+root = node2.sum(dim=-1)
+```
+suppose we would like to set only the zeroth and first element of `node1` to `-10` and `-20` respectively, and keep the
+third element as it is, i.e. 
+```
+node1 = x * y    
+node1[:2] = torch.tensor([-10, -20]) // intervention
+node2 = -1 * node1 + y
+root = node2.sum(dim=-1)
+```
+
+`antra` supports various ways to do this.
+
+### Specifying intervention location as a string
+
+When constructing the intervention object, you can add the bracket notation as you normally would after the string of the 
+node name:
+```python
+intervention_dict = {"node1[:2]": torch.tensor([-10, -20])}
+interv = Intervention(base_input_gi_obj, intervention_dict) # base input as defined above
+# --- or ---
+interv = Intervention(base_input_gi_obj)
+interv.set_intervention("node1[:2]", torch.tensor([-10, -20]))
+```
+
+However, this may be less flexible when you'd like to dynamically modify the indexing and slicing in the brackets, which brings us to
+the next method:
+
+### Specifying intervention location using the `LOC` object
+
+Normally, we can access slices of a `pytorch` tensor and `numpy` array using square brackets, e.g. `a[:,0]` gets us the
+0th element in each row of the tensor `a`. But can we somehow store the indexing information `[:,0]` into a variable,
+say `idx`, such that `a[idx]` is equivalent as `a[:,0]`? This would be useful as now we can flexibly pass `idx` around 
+and use it on different tensors/arrays.
+
+`antra` provides a helper object, `LOC` (as in `LOCation`) that does the above, as seen in this example:
+```python
+from antra import LOC
+idx = LOC[:2]
+torch.all(a[idx] == a[:2]) # True 
+```
+We can then use the `LOC` object to provide the indexing information for an intervention, by specifying a `LOC` object 
+for each node. There are two alternatives to do this:
+```python
+intervention_dict = {"node1": torch.tensor([-10, -20])}
+location_dict = {"node1": LOC[:2]}
+interv = Intervention(base_input_gi_obj, intervention_dict, location_dict) # base input as defined above
+# --- or ---
+interv = Intervention(base_input_gi_obj)
+interv.set_intervention("node1", torch.tensor([-10, -20]))
+interv.set_location("node1", LOC[:2])
+```
+
+### Computing interventions with specified indexing location
+
+This is the same as described in the [section above](#computing-the-intervention)
+
+### How this works under the hood
+> Using the bracket notation `[]` on an python object is essentially a call to `__getitem__()`
+> (to retrieve values) or `__setitem__()` (for value assignments) builtin methods. Within the brackets,
+> a comma denotes a `tuple`, and colons `:` are shorthand for python `slice` objects. 
+> 
+> For example, for a given tensor `x`, the notation `:,:2` within `x[:,:2]` essentially represents `tuple(slice(None, None, None), slice(None, 2, None))`. 
+> `torch.tensor`s `__getitem__()` and `__setitem__()` takes this as its argument and interpret it as accessing
+> the first two elements of each row.
+> 
+> And finally, the `LOC` object is just a dummy object with a `__getitem__()` function that directly returns whatever is 
+> passed into the brackets:
+```python
+# antra/location.py
+class Location:
+    def __getitem__(self, item):
+        return item
+```
+
+## Batched computation and intervention
+
 
 ## Value caching and keys
 
@@ -255,7 +370,6 @@ _, _ = g.intervene(interv1)
 ```
 
 
-## Batched computation and intervention
 
 
 ## Abstracted computation graphs
