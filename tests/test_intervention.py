@@ -71,28 +71,28 @@ def test_init_with_loc4(base_input, interv1_loc, interv2, loc2):
     assert i.location["node2"] == LOC[0, ..., :]
 
 
-def test_setter_intervention(base_input, interv1, interv1_loc):
-    i = Intervention(base_input)
-    i.intervention = interv1
-    assert "node" in i.intervention
-    assert len(i.location) == 0
-    interv_input1 = i.intervention
+# def test_setter_intervention(base_input, interv1, interv1_loc):
+#     i = Intervention(base_input)
+#     i.intervention = interv1
+#     assert "node" in i.intervention
+#     assert len(i.location) == 0
+#     interv_input1 = i.intervention
+#
+#     # replace with intervention containing loc
+#     i.intervention = interv1_loc
+#     interv_input2 = i.intervention
+#     assert "node" in i.intervention
+#     assert i.location["node"] == LOC[5:10]
+#
+#     # i.intervention should be an immutable GraphInput object; setting it should
+#     # produce a new instance
+#     assert interv_input1 is not interv_input2
 
-    # replace with intervention containing loc
-    i.intervention = interv1_loc
-    interv_input2 = i.intervention
-    assert "node" in i.intervention
-    assert i.location["node"] == LOC[5:10]
 
-    # i.intervention should be an immutable GraphInput object; setting it should
-    # produce a new instance
-    assert interv_input1 is not interv_input2
-
-
-def test_setter_locs(base_input, interv1, loc1):
-    i = Intervention(base_input, intervention=interv1)
-    i.location = loc1
-    assert i.location["node"] == LOC[5:10]
+# def test_setter_locs(base_input, interv1, loc1):
+#     i = Intervention(base_input, intervention=interv1)
+#     i.location = loc1
+#     assert i.location["node"] == LOC[5:10]
 
 
 def test_set_intervention(base_input):
@@ -119,11 +119,11 @@ def test_loc(base_input, interv1_loc):
     assert torch.all(torch.eq(x, y))
 
 
-def test_device(base_input, interv1_loc):
-    device = torch.device("cuda")
-    base_input = base_input.to(device)
-    interv1_loc = {k: v.to(device) for k, v in interv1_loc.items()}
-    i = Intervention(base_input, intervention=interv1_loc)
-
-    assert all(t.is_cuda for t in i.base.values.values())
-    assert all(v.is_cuda for v in i.intervention.values.values())
+# def test_device(base_input, interv1_loc):
+#     device = torch.device("cuda")
+#     base_input = base_input.to(device)
+#     interv1_loc = {k: v.to(device) for k, v in interv1_loc.items()}
+#     i = Intervention(base_input, intervention=interv1_loc)
+#
+#     assert all(t.is_cuda for t in i.base.values.values())
+#     assert all(v.is_cuda for v in i.intervention.values.values())

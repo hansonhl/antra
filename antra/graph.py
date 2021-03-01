@@ -146,12 +146,10 @@ class ComputationGraph:
         raise NotImplementedError
 
     def intervene(self, intervention: Intervention):
-        """
-        Run intervention on computation graph.
+        """ Run intervention on computation graph.
 
-        :param intervention:
-        :param store_cache:
-        :return:
+        :param intervention: Intervention object.
+        :return: base result and intervention result
         """
         base_res = self.compute(intervention.base)
 

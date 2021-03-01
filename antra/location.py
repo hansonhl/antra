@@ -45,6 +45,6 @@ class Location:
         if isinstance(l, tuple) or isinstance(l, list):
             return '[' + ",".join(Location.slice_to_str(s) for s in l) + "]"
         elif isinstance(l, slice):
-            return Location.slice_to_str(l)
+            return '[' + Location.slice_to_str(l) + "]"
         elif isinstance(l, int):
             return str(l)

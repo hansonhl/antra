@@ -1,6 +1,7 @@
 from typing import Dict, Any, Sequence
 
-from .utils import serialize
+from .utils import serialize, serialize_batch
+
 
 class GraphInput:
     """ A hashable input object that stores a dict mapping names of nodes to
@@ -21,19 +22,24 @@ class GraphInput:
         :param batch_dim: If inputs are batched and are pytorch tensors, the
             dimension for the batch
         :param keys: A unique key/hash value for each input value in the batch
+        :param key_leaves: Specify a (sub)set of leaves whose values are used
+            to automatically calculate the key
         """
         self._values = values
         self.cache_results=cache_results
         self.batched = batched
         self.batch_dim = batch_dim
+        self.key_leaves = key_leaves
 
         if batched and not keys:
-            raise ValueError("Must provide keys for each element of the batch!")
+            keys = serialize_batch(
+                {k: v for k, v in values if k in key_leaves} if key_leaves else values,
+                dim=batch_dim
+            )
         if not batched and not keys:
-            if not key_leaves:
-                keys = serialize(values)
-            else:
-                keys = serialize({k: v for k, v in values if k in key_leaves})
+            keys = serialize(
+                {k: v for k, v in values if k in key_leaves} if key_leaves else values
+            )
 
         self.keys = keys
         # self._all_tensors = len(values) > 0 and all(isinstance(v, torch.Tensor)
@@ -49,7 +55,7 @@ class GraphInput:
         #         raise RuntimeError("Currently does not support input values on multiple devices")
 
     @classmethod
-    def batched(cls, values: Dict[str,Any], keys, cache_results: bool=True,
+    def batched(cls, values: Dict[str,Any], keys=None, cache_results: bool=True,
                  batch_dim: int=0):
         return cls(values, cache_results=cache_results, batched=True,
                    batch_dim=batch_dim, keys=keys)
@@ -79,6 +85,9 @@ class GraphInput:
             s = ", ".join(
                 ("'%s': %s" % (k, type(v))) for k, v in self.values.items())
             return "GraphInput{%s}" % s
+
+    def is_empty(self):
+        return not self._values
 
     def to(self, device):
         """Move all data to a pytorch Device.

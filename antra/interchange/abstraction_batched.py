@@ -149,7 +149,7 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
         )
         high_interv_key = [(serialize(x), serialize(interv)) for x, interv in \
                            zip(high_input, high_interv_value)]
-        high_intervention = antra.ComputationGraph.batched(
+        high_intervention = antra.Intervention.batched(
             high_base, high_interv_key,
             intervention={high_node: high_interv_value},
         )

@@ -3,6 +3,10 @@ import re
 from .location import Location
 from .graph_input import GraphInput
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from typing import Dict, Union, Sequence
 
 class Intervention:
@@ -11,8 +15,8 @@ class Intervention:
     def __init__(self, base: Union[Dict, GraphInput],
                  intervention: Union[Dict, GraphInput]=None,
                  location: Dict=None,
-                 cache_results: bool=True, cache_base_results:bool=False,
-                 batched: bool=False, batch_dim: int=0, keys: Sequence=None):
+                 cache_results: bool=True, cache_base_results:bool=True,
+                 batched: bool=False, batch_dim: int=0):
         """ Construct an intervention experiment.
 
         :param base: `GraphInput` or `dict(str->Any)` containing the "base"
@@ -35,43 +39,57 @@ class Intervention:
         """
         intervention = {} if intervention is None else intervention
         location = {} if location is None else location
-        if batched and not (isinstance(base, GraphInput) and base.batched):
-            raise ValueError("Must provide a batched GraphInput for a batched Intervention")
+        # if batched and not (isinstance(base, GraphInput) and base.batched):
+        #     raise ValueError("Must provide a batched GraphInput for a batched Intervention")
 
-        self._setup(base, intervention, location)
         self.cache_results = cache_results
         self.cache_base_results = cache_base_results
         self.affected_nodes = None
         self.batched = batched
         self.batch_dim = batch_dim
 
-        if batched and not keys:
-            raise ValueError("Must provide keys for each element of the batch!")
-        elif not batched:
-            keys = self._prepare_keys()
+        self._setup(base, intervention, location)
 
-        self.keys = keys
 
-    def _prepare_keys(self):
+    def _get_keys(self):
+        # assume at this point base and intervention are already converted into
+        # GraphInput objects, which already have
         assert isinstance(self.base, GraphInput)
         assert isinstance(self.intervention, GraphInput)
-        loc_key = tuple(sorted((k, Location.loc_to_str(v)) for k, v in self.location.items()))
-        return (self.base.keys, self.intervention.keys, loc_key)
+
+        if not self.batched:
+            loc_key = tuple(sorted(
+                (k, Location.loc_to_str(v)) for k, v in self.location.items()))
+            return (self.base.keys, self.intervention.keys, loc_key)
+        else:
+            if self.intervention.is_empty():
+                return self.base.keys
+            else:
+                loc_key = tuple(sorted((k, Location.loc_to_str(v)) for k, v in self.location.items()))
+                base_key, interv_key = self.base.keys, self.intervention.keys
+                if len(base_key) != len(interv_key):
+                    raise RuntimeError("Must provide the same number of inputs in batch for base and intervention")
+                return [(b, i, loc_key) for b, i in zip(self.base.keys, self.intervention.keys)]
+
 
     @classmethod
-    def batched(cls, base: Union[Dict, GraphInput], keys: Sequence,
+    def batched(cls, base: Union[Dict, GraphInput],
                 intervention: Union[Dict, GraphInput]=None,
-                location: Dict=None, cache_results: bool=False,
-                cache_base_results: bool=False,
+                location: Dict=None, cache_results: bool=True,
+                cache_base_results: bool=True,
                 batch_dim: int=0):
+        """ Specify a batched intervention object"""
         return cls(base=base, intervention=intervention, location=location,
                    cache_results=cache_results, cache_base_results=cache_base_results,
-                   batched=True, batch_dim=batch_dim, keys=keys)
+                   batched=True, batch_dim=batch_dim)
 
     def _setup(self, base=None, intervention=None, location=None):
         if base is not None:
             if isinstance(base, dict):
-                base = GraphInput(base, cache_results=self.cache_base_results)
+                base = GraphInput(
+                    base, cache_results=self.cache_base_results,
+                    batched=self.batched, batch_dim=self.batch_dim
+                )
             self._base = base
 
         if location is not None:
@@ -105,13 +123,23 @@ class Intervention:
                 intervention.pop(name)
             intervention.update(to_add)
 
-            self._intervention = GraphInput(intervention)
+            self._intervention = GraphInput(
+                intervention, batched=self.batched, batch_dim=self.batch_dim
+            )
 
         self._location = location
+        if self.location and not self.cache_base_results or not self.base.cache_results:
+            logger.warning(f"To intervene on a indexed location, results of the base run must be cached, "
+                           f"but self.cache_base_results is set to false. Automatically converting it to True")
+            self.cache_base_results = True
+            self.base.cache_results = True
+
         for loc_name in self.location:
             if loc_name not in self.intervention:
-                raise RuntimeWarning(
-                    " %s in locs does not have an intervention value")
+                logger.warning(f"{loc_name} is given a location but does not have an intervention value")
+
+        # setup keys
+        self.keys = self._get_keys()
 
     @property
     def base(self):
@@ -121,41 +149,38 @@ class Intervention:
     def intervention(self):
         return self._intervention
 
-    @intervention.setter
-    def intervention(self, values):
-        self._setup(intervention=values, location={})
-        if not self.batched:
-            self.keys = self._prepare_keys()
+    # @intervention.setter
+    # def intervention(self, values):
+    #     self._setup(intervention=values, location={})
+    #     if not self.batched:
+    #         self.keys = self._prepare_keys()
 
     @property
     def location(self):
         return self._location
 
-    @location.setter
-    def location(self, values):
-        self._setup(location=values)
-        if not self.batched:
-            self.keys = self._prepare_keys()
+    # @location.setter
+    # def location(self, values):
+    #     self._setup(location=values)
+    #     if not self.batched:
+    #         self.keys = self._prepare_keys()
 
     def set_intervention(self, name, value):
-        d = self._intervention.values if self._intervention is not None else {}
+        d = self._intervention.values.copy() if self._intervention is not None else {}
         d[name] = value
         self._setup(intervention=d, location=None)  # do not overwrite existing locations
-        if not self.batched:
-            self.keys = self._prepare_keys()
+
 
     def set_location(self, name, value):
         d = self._location if self._location is not None else {}
         d[name] = value
         self._setup(location=d)
-        if not self.batched:
-            self.keys = self._prepare_keys()
 
     def __getitem__(self, name):
         return self._intervention.values[name]
 
-    def __setitem__(self, name, value):
-        self.set_intervention(name, value)
+    # def __setitem__(self, name, value):
+    #     self.set_intervention(name, value)
 
 
     def find_affected_nodes(self, graph):

@@ -1,11 +1,8 @@
 import sys
 import copy
 
-if 'torch' in sys.modules:
-    pass
-if 'numpy' in sys.modules:
-    pass
 from .location import Location
+from typing import *
 
 def is_torch_tensor(x):
     if 'torch' in sys.modules:
@@ -19,6 +16,12 @@ def is_numpy_array(x):
     else:
         return False
 
+def is_numpy_scalar(x):
+    if 'numpy' in sys.modules:
+        return sys.modules['numpy'].isscalar(x)
+    else:
+        return False
+
 def copy_helper(x):
     if isinstance(x, (list, tuple, str, dict)) or is_numpy_array(x):
         return copy.deepcopy(x)
@@ -28,9 +31,12 @@ def copy_helper(x):
         return x
 
 def serialize(x):
+    """ Serialize x so that it is hashable. Recursively converts everything into tuples."""
     if isinstance(x, (bool, int, float, str, frozenset, bytes, complex)):
         return x
-    elif is_torch_tensor(x):
+    elif is_numpy_scalar(x):
+        return x
+    elif is_torch_tensor(x) or is_numpy_array(x):
         if len(x.shape) == 0:
             return x.item()
         elif len(x.shape) == 1:
@@ -44,9 +50,9 @@ def serialize(x):
         elif len(x.shape) == 5:
             return tuple(tuple(tuple(tuple(tuple(d4) for d4 in d3) for d3 in d2) for d2 in d1) for d1 in x.tolist())
         else:
-            raise NotImplementedError(f"cannot serialize x with {len(x.shape)} dimensions")
-    elif is_numpy_array(x):
-        return x.tostring()
+            return tuple(serialize(z) for z in x.tolist())
+    # elif is_numpy_array(x):
+    #     return x.tostring()
     elif isinstance(x, (tuple, list)):
         return tuple(serialize(z) for z in x)
     elif isinstance(x, set):
@@ -56,6 +62,23 @@ def serialize(x):
     else:
         raise ValueError(f"Does not support input type: {type(x)}")
 
+def _split_np_array(a, dim):
+    if 'numpy' in sys.modules and is_numpy_array(a):
+        return sys.modules['numpy'].moveaxis(a, dim, 0)
+    else:
+        raise ValueError(f"Batched GraphInput values must be np.ndarray or torch.tensor. Given: {type(a)}")
+
+def serialize_batch(d: Dict[str, Any], dim: int) -> List[Tuple]:
+    """ Serialize a dict of batched inputs.
+
+    :param d: Dictionary mapping from node names to values batched into a
+        torch tensor or numpy array
+    :param dim: Batch dimension
+    :return: A list containing a hashable key for each input value in the batch
+    """
+    split_values = [v.unbind(dim=dim) if is_torch_tensor(v) else _split_np_array(v, dim) for v in d.values()]
+    return [tuple(sorted((k, serialize(a)) for k, a in zip(d.keys(), x)))
+            for x in zip(*split_values)]
 
 def stringify_mapping(m):
     res = {}

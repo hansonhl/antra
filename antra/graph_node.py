@@ -1,4 +1,4 @@
-import sys
+import importlib
 
 from .intervention import Intervention
 from .graph_input import GraphInput
@@ -6,7 +6,7 @@ from .utils import copy_helper
 
 from typing import Union, Callable, Dict
 
-if "torch" in sys.modules:
+if importlib.util.find_spec("torch"):
     import antra.torch_utils as torch_utils
 
 # TODO: add type hints
