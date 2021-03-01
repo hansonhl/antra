@@ -182,14 +182,19 @@ node1 = x * y     // element-wise product
 node2 = -1 * node1 + y
 root = node2.sum(dim=-1)
 ```
-Suppose we first run the computation graph with inputs `x = [10, 20, 30], y = [2, 2, 2]` and get `node1 = [20, 40, 60]`, 
-`node2 = [-18, -38, -58]` and `root = -114`. This will be the "base" input.
+Suppose we start off by run the computation graph with inputs
+`x = [10, 20, 30], y = [2, 2, 2]`
+which gives us `node1 = [20, 40, 60], node2 = [-18, -38, -58], and root = -114`.
 
-Suppose we want to ask what would happen if we set the value of `node1` to `[-20, -20, -20]` during the computation, 
+We call this computation process with no intervention the "*base*" run, and call `x = [10, 20, 30], y = [2, 2, 2]` 
+the "*base*" input. 
+
+Then, suppose we want to know what would happen if we set the value of `node1` to `[-20, -20, -20]` during this base run, 
 ignoring the result of `x * y`.
 
-This would be an intervention: when we compute `node2`, we set `node1 = [-20, -20, -20]` and the input value
-`y = [2, 2, 2]` , to get `node2 = [22, 22, 22]` and subsequently `root = 66`.
+This would be an intervention on the base run. We do an "*intervention*" run, where when we compute `node2`, 
+we set `node1 = [-20, -20, -20]`, while using input values and intermediate values for other nodes that are same
+as the base run, i.e. `y = [2, 2, 2]`. The intervention run gives us `node2 = [22, 22, 22]` and subsequently `root = 66`.
 
 ### Setting up an intervention
 To perform the above intervention using `antra`, we construct a `antra.Intervention` object. `antra` allows many 
