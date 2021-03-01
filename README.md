@@ -34,7 +34,7 @@ $ pip install antra
 
 `antra` is implemented using vanilla Python 3, and its basic usage doesn't depend on other packages.
 
-To utilize `antra`'s batch operations, please [install `pytorch`](https://pytorch.org/get-started/locally/)
+`antra`'s batch operations require `pytorch`. Its installation instructions can be found [here](https://pytorch.org/get-started/locally/).
 
 ## Basic Usage
 
@@ -189,12 +189,11 @@ which gives us `node1 = [20, 40, 60], node2 = [-18, -38, -58], and root = -114`.
 We call this computation process with no intervention the "*base*" run, and call `x = [10, 20, 30], y = [2, 2, 2]` 
 the "*base*" input. 
 
-Then, suppose we want to know what would happen if we set the value of `node1` to `[-20, -20, -20]` during this base run, 
-ignoring the result of `x * y`.
+Then, suppose we want to know what would happen if we ignore the result of `x * y` and directly set the value of `node1` to `[-20, -20, -20]` during this base run.
 
-This would be an intervention on the base run. We do an "*intervention*" run, where when we compute `node2`, 
-we set `node1 = [-20, -20, -20]`, while using input values and intermediate values for other nodes that are same
-as the base run, i.e. `y = [2, 2, 2]`. The intervention run gives us `node2 = [22, 22, 22]` and subsequently `root = 66`.
+This would be an intervention on the base run. We do an "*intervention*" run, where we set `node1 = [-20, -20, -20]`,
+and when we compute `node2`, use the new value of `node1`, while using the same input values and intermediate values
+as the base run, i.e. `y = [2, 2, 2]`. The intervention thus gives us `node2 = [22, 22, 22]` and subsequently `root = 66`.
 
 ### Setting up an intervention
 To perform the above intervention using `antra`, we construct a `antra.Intervention` object. `antra` allows many 
@@ -220,7 +219,7 @@ interv = Intervention(base_input_dict, intervention_dict)
 interv = Intervention(base_input_dict, intervention_gi_obj)
 ```
 Another alternative is to specify the intervened nodes and values separately using the `set_intervention()` method,
-which makes code more readable, instead of packing everything into the constructor function.
+which to some extent makes the code more readable by avoiding packing everything into one constructor.
 ```python
 interv1 = Intervention(base_input_gi_obj)
 interv1.set_intervention("node1", torch.tensor([-20, -20, -20]))
