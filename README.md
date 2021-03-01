@@ -251,16 +251,10 @@ compute parts of the graph whose results are going to be unused (such as `x * y`
 You can intervene on only specific elements or slices of vectors and tensors using `antra` by specifying an array index as you
 would normally do using square brackets `[]`.
 
-Using the same example as above,
-```
-node1 = x * y     // element-wise product
-node2 = -1 * node1 + y
-root = node2.sum(dim=-1)
-```
-suppose we would like to set only the zeroth and first element of `node1` to `-10` and `-20` respectively, and keep the
+Using the same example as above, suppose we would like to set only the zeroth and first element of `node1` to `-10` and `-20` respectively, and keep the
 third element as it is, i.e. 
 ```
-node1 = x * y    
+node1 = x * y // element-wise multiplication
 node1[:2] = torch.tensor([-10, -20]) // intervention
 node2 = -1 * node1 + y
 root = node2.sum(dim=-1)
@@ -270,8 +264,8 @@ root = node2.sum(dim=-1)
 
 ### Specifying intervention location as a string
 
-When constructing the intervention object, you can add the bracket notation as you normally would after the string of the 
-node name:
+When constructing the intervention object, you can add the bracket notation as usual but in the form of a string appended
+after the node name:
 ```python
 intervention_dict = {"node1[:2]": torch.tensor([-10, -20])}
 interv = Intervention(base_input_gi_obj, intervention_dict) # base input as defined above
@@ -279,8 +273,7 @@ interv = Intervention(base_input_gi_obj, intervention_dict) # base input as defi
 interv = Intervention(base_input_gi_obj)
 interv.set_intervention("node1[:2]", torch.tensor([-10, -20]))
 ```
-
-However, this may be less flexible when you'd like to dynamically modify the indexing and slicing in the brackets, which brings us to
+This may be less flexible when you'd like to dynamically modify the indexing and slicing in the brackets, which brings us to
 the next method:
 
 ### Specifying intervention location using the `LOC` object
@@ -297,7 +290,7 @@ idx = LOC[:2]
 torch.all(a[idx] == a[:2]) # True 
 ```
 We can then use the `LOC` object to provide the indexing information for an intervention, by specifying a `LOC` object 
-for each node. There are two alternatives to do this:
+for each node. There are two alternative ways to do this:
 ```python
 intervention_dict = {"node1": torch.tensor([-10, -20])}
 location_dict = {"node1": LOC[:2]}
@@ -310,15 +303,15 @@ interv.set_location("node1", LOC[:2])
 
 ### Computing interventions with specified indexing location
 
-This is the same as described in the [section above](#computing-the-intervention)
+This is the same as described in the [section above](#computing-the-intervention).
 
 ### How this works under the hood
-> Using the bracket notation `[]` on an python object is essentially a call to `__getitem__()`
+> The bracket notation `[]` on a python object is essentially a call to `__getitem__()`
 > (to retrieve values) or `__setitem__()` (for value assignments) builtin methods. Within the brackets,
-> a comma denotes a `tuple`, and colons `:` are shorthand for python `slice` objects. 
+> comma `,` denote a `tuple`, and colons `:` are a shorthand for python `slice` objects. 
 > 
-> For example, for a given tensor `x`, the notation `:,:2` within `x[:,:2]` essentially represents `tuple(slice(None, None, None), slice(None, 2, None))`. 
-> `torch.tensor`s `__getitem__()` and `__setitem__()` takes this as its argument and interpret it as accessing
+> For example, for a pytorch tensor `x`, the notation `:,:2` within `x[:,:2]` essentially represents `tuple(slice(None, None, None), slice(None, 2, None))`. 
+> `torch.tensor`'s `__getitem__()` and `__setitem__()` take this as its argument and interpret it as accessing
 > the first two elements of each row.
 > 
 > And finally, the `LOC` object is just a dummy object with a `__getitem__()` function that directly returns whatever is 
