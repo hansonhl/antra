@@ -138,6 +138,73 @@ a `GraphNode` object that can be used in the remainder of the code.
 Note that the *variable names* of the function's arguments can be different from the child node names 
 that appear in the decorator.
 
+### Converting a `torch.nn.Module` into a subclass of `ComputationGraph`
+
+Oftentimes the functions in the computation graph may contain constant values or model parameters. Or you would like to 
+convert a neural network model with trained weights into a `ComputationGraph`.
+
+In such cases it would be convenient to define the computation graph as a custom class that inherits from the class `ComputationGraph`. 
+Now you can store the model's parameters and other functionalities as that class's member attributes and methods.
+
+For example, suppose we already have a simple Multi-Layer Perceptron (MLP) module that we trained separately.
+```python
+import torch
+class MyMLP(torch.nn.Module):
+    def __init__(self, in_dim, hidden_dim, out_dim):
+        self.hidden_linear = torch.nn.Linear(in_dim, hidden_dim)
+        self.activation = torch.nn.ReLU()
+        self.out_linear = torch.nn.Linear(hidden_dim, out_dim)
+    
+    def forward(self, x):
+        h = self.hidden_linear(x)
+        h = self.activation(h)
+        return self.out_linear(h)
+```
+
+We can easily convert this into a `ComputationGraph` by defining a new custom class, storing the `nn.Module` as an
+object attribute so we can access its parameters. In the `__init__` of our custom class, we then re-implement the 
+functions in `forward()` in terms of graph nodes. Finally, we pass the final output node into the `super().__init__`
+constructor.
+```python
+import torch
+from antra import *
+class MyMLPCompGraph(ComputationGraph):
+    def __init__(self, model: torch.nn.Module):
+        self.model = model
+        input_leaf = GraphNode.leaf("input")
+        
+        @GraphNode(input_leaf)
+        def hidden_linear(x):
+            return self.model.hidden_linear(x)
+        
+        @GraphNode(hidden_linear)
+        def activation(h):
+            return self.model.activation(h)
+
+        @GraphNode(activation)
+        def out_linear(h):
+            return self.model.out_linear(h)
+
+        super().__init__(out_linear)
+```
+Now we can use `MyMLPCompGraph` as a normal computation graph:
+```python
+nn_model = MyMLP(in_dim=10, hidden_dim=20, out_dim=2)
+g = MyMLPCompGraph(nn_model)
+g.compute(...) 
+g.intervene(...)
+# see the following sections on computation and interventions
+```
+
+Note that you can freely control the granularity of the graph structure, as long as the computation process remains intact. 
+For example, if you are only interested the outputs of some particular functions, you can bunch them up into one node, such as:
+```python
+@GraphNode(input_leaf)
+def linear_and_activation(x):
+    h = self.model.hidden_linear(x)
+    return self.model.activation(h)
+```
+
 ## Basic computation
 
 Having defined the computation graph, one can run computations with it by first specifying the inputs to the graph using a
@@ -203,25 +270,27 @@ An intervention object requires a base input and the intervention itself, both o
 to numeric values. This mapping can be given either using a `dict` or a `GraphInput` object that wraps around it.
 
 ```python
+# constructing an intervention
 import torch
 from antra import GraphInput, Intervention
 
 base_input_dict = {"x": torch.tensor([10, 20, 30]), "y": torch.tensor([2, 2, 2])}
-base_input_gi_obj = GraphInput(base_input_dict)
+base_graph_input = GraphInput(base_input_dict)
 intervention_dict = {"node1": torch.tensor([-20, -20, -20])}
-intervention_gi_obj = GraphInput(intervention_dict)
+intervention_graph_input = GraphInput(intervention_dict)
 
 # the following are equivalent:
 
-interv = Intervention(base_input_gi_obj, intervention_dict)
-interv = Intervention(base_input_gi_obj, intervention_gi_obj)
+interv = Intervention(base_graph_input, intervention_dict)
+interv = Intervention(base_graph_input, intervention_graph_input)
 interv = Intervention(base_input_dict, intervention_dict)
-interv = Intervention(base_input_dict, intervention_gi_obj)
+interv = Intervention(base_input_dict, intervention_graph_input)
 ```
 Another alternative is to specify the intervened nodes and values separately using the `set_intervention()` method,
 which to some extent makes the code more readable by avoiding packing everything into one constructor.
 ```python
-interv1 = Intervention(base_input_gi_obj)
+# another way to construct an intervention
+interv1 = Intervention(base_graph_input)
 interv1.set_intervention("node1", torch.tensor([-20, -20, -20]))
 ```
 
@@ -230,6 +299,7 @@ interv1.set_intervention("node1", torch.tensor([-20, -20, -20]))
 Use the `g.intervene()` method to performing the intervention on the graph. It returns two root outputs, computed
 without and with the intervention respectively.
 ```python
+# running an intervention
 base_result, interv_result = g.intervene(interv)
 print(base_result, interv_result) # -63, 66
 ```
@@ -237,11 +307,12 @@ To retrieving intermediate node values during the intervention, use `g.compute_n
 an `Intervention` object. You can also retrieve the intermediate node value computed without the intervention by passing
 in the `GraphInput` object of the intervention's base input.
 ```python
+# computing intermediate values
 node2_interv_value = g.compute_node("node2", interv)
 print(node2_interv_value) # tensor([22,22,22])
 
 # the following are equivalent
-node2_base_value = g.compute_node("node2", base_input_gi_obj) # base_input_gi_obj defined above
+node2_base_value = g.compute_node("node2", base_graph_input) # base_graph_input defined above
 node2_base_value = g.compute_node("node2", interv.base) 
 print(node2_base_value) # tensor([20, 40, 60])
 ```
@@ -271,10 +342,11 @@ root = node2.sum(dim=-1)
 When constructing the intervention object, you can add the bracket notation as usual but in the form of a string appended
 after the node name:
 ```python
+# specifying intervention location as a string
 intervention_dict = {"node1[:2]": torch.tensor([-10, -20])}
-interv = Intervention(base_input_gi_obj, intervention_dict) # base input as defined above
+interv = Intervention(base_graph_input, intervention_dict) # base input as defined above
 # --- or ---
-interv = Intervention(base_input_gi_obj)
+interv = Intervention(base_graph_input)
 interv.set_intervention("node1[:2]", torch.tensor([-10, -20]))
 ```
 This may be less flexible when you'd like to dynamically modify the indexing and slicing in the brackets, which brings us to
@@ -296,11 +368,12 @@ torch.all(a[idx] == a[:2]) # True
 We can then use the `LOC` object to provide the indexing information for an intervention, by specifying a `LOC` object 
 for each node. There are two alternative ways to do this:
 ```python
+# two ways to specify an intervention
 intervention_dict = {"node1": torch.tensor([-10, -20])}
 location_dict = {"node1": LOC[:2]}
-interv = Intervention(base_input_gi_obj, intervention_dict, location_dict) # base input as defined above
+interv = Intervention(base_graph_input, intervention_dict, location_dict) # base input as defined above
 # --- or ---
-interv = Intervention(base_input_gi_obj)
+interv = Intervention(base_graph_input)
 interv.set_intervention("node1", torch.tensor([-10, -20]))
 interv.set_location("node1", LOC[:2])
 ```
@@ -329,8 +402,58 @@ class Location:
 
 ## Batched computation and intervention
 
+`antra` may be used to analyze deep neural network models, which work most efficiently when inputs are presented in 
+batches. The following are some necessary steps to perform batched computation and intervention with `antra`.
 
-## Value caching and keys
+1. **Install** `pytorch` (see installation instructions [here](https://pytorch.org/get-started/locally/)).  
+Currently `antra` requires `pytorch` for its batching functionality to work. `numpy` support will be added in the near
+future.
+
+2. **Define your computation graph such that the node functions support the batched inputs**.
+   The inputs to the forward function of each node will be in its original batched form.
+   
+    For example, we would like to multiply a weight matrix W of shape `(hidden_dim, input_dim)` with an input `x`. 
+    In the unbatched case, where `x` is a single vector with length `(input_dim,)`, this would be:
+    ```python
+    # single input, wouldn't work with x of shape (batch_size, input_dim)
+    matmul_node = GraphNode(input_leaf, name="matmul", 
+                            forward=lambda x: torch.matmul(W, x))
+    ```
+    The `forward` function above wouldn't work if `x` is batched and has the shape `(batch_size, input_dim)`. 
+    Instead, we should write:
+    ```python
+    # supports batched input x of shape (batch_size, input_dim)
+    matmul_node = GraphNode(input_leaf, name="matmul_batched", 
+                            forward=lambda x: torch.matmul(x, W.T))
+    ```
+    Note the `W.T` above that fits with the shape of `x`. The output of the node will have shape `(batch_size, hidden_dim)`. 
+
+3. **Prepare batched `GraphInput` objects**. This is relatively straightforward, by just additionally 
+   setting `batched=True` and providing the dimension of the batch in `batch_dim`, e.g. `batch_dim=0`. This is the
+   index of the dimension/axis along which your inputs are batched.
+    ```python
+    base_input_values = torch.randn(batch_size, input_dim_size) # batched input value
+    base_input_dict = {"input_leaf": base_input_values}
+    base_graph_input = GraphInput(base_input_dict, batched=True, batch_dim=0)
+    ```
+   
+4. **Prepare batched `Intervention` objects**. Also set `batched=True` and `batch_dim` in its constructor. Note that if
+    you are providing a `GraphInput` object instead of a `dict` for the base input or intervention values, its `batched`
+    must also be set to `True` and use the same `batch_dim`. (see section above on [setting up an intervention](#setting-up-an-intervention))
+    ```python
+    intervention_dict = {"matmul_batched[:,:2]": torch.zeros(batch_size, 2)}
+    intervention = Intervention(base_graph_input, intervention_dict,
+                                batched=True, batch_dim=0)
+    ```
+    Note that the intervention location indexing in the brackets `[:,:2]` is compatible with both 1) `matmul_batched`'s
+    output shape `(batch_size, hidden_dim)`, as well as the intervention value itself `torch.zeros(batch_size, 2)`. 
+    In other words, the indexing should be the same as if you were directly assigning the value:
+    ```python
+    matmul_batched_output = torch.matmul(x, W.T) # (batch_size, hidden_dim)
+    matmul_batched_output[:,:2] = torch.zeros(batch_size,2)
+    ```
+5. **Run computation as you normally would.** The outputs will be batched as well.
+
 
 ## Caching control
 
@@ -366,6 +489,7 @@ interv1 = Intervention(input_dict, intervention_dict, cache_results=False, cache
 _, _ = g.intervene(interv1)
 ```
 
+## Value caching and keys
 
 
 
