@@ -198,11 +198,12 @@ g.intervene(...)
 
 Note that you can freely control the granularity of the graph structure, as long as the computation process remains intact. 
 For example, if you are only interested the outputs of some particular functions, you can bunch them up into one node, such as:
+
 ```python
 @GraphNode(input_leaf)
 def linear_and_activation(x):
-    h = self.model.hidden_linear(x)
-    return self.model.activation(h)
+    h = self.model.hidden_1(x)
+    return self.model.activation_1(h)
 ```
 
 ## Basic computation
@@ -382,7 +383,9 @@ interv.set_location("node1", LOC[:2])
 
 This is the same as described in the [section above](#computing-the-intervention).
 
-### How this works under the hood
+
+> **How all of this works under the hood**
+> 
 > The bracket notation `[]` on a python object is essentially a call to `__getitem__()`
 > (to retrieve values) or `__setitem__()` (for value assignments) builtin methods. Within the brackets,
 > comma `,` denote a `tuple`, and colons `:` are a shorthand for python `slice` objects. 
@@ -454,8 +457,11 @@ future.
     ```
 5. **Run computation as you normally would.** The outputs will be batched as well.
 
-
 ## Caching control
+
+By default, when you run `compute()` or `intervene()` with inputs or an intervention on a `ComputationGraph`, each node
+in the graph will automatically store the results of that input in a cache. The following are some ways to control this
+caching behavior, which may be useful when the outputs take up a lot of memory space.
 
 **Prevent a computation from caching a result on a certain input**
 
@@ -479,7 +485,7 @@ def node1(x, y):
 # --- or ---
 node1.cache_results = False
 ```
-It is recommended to do this for nodes whose output values you are not interested in obtaining, or nodes that will not
+This method is recommended for nodes whose output values you are not interested in obtaining, or nodes that will not
 be intervened on.
 
 **Prevent caching results during an intervention**
