@@ -107,12 +107,10 @@ if __name__ == "__main__":
     input_y_batch = torch.tensor([[1, 1, 1], [1, 1, 1], [1, 1, 1,],
                                   [10, 10, 10], [10, 20, 30]])
 
-    input_keys = [tuple(x.tolist() + y.tolist()) for x, y in zip(input_x_batch, input_y_batch)]
-    input_batch = GraphInput.batched({"x": input_x_batch, "y": input_y_batch}, input_keys)
+    input_batch = GraphInput.batched({"x": input_x_batch, "y": input_y_batch})
 
     interv_input = torch.tensor([[100, 100]] * 5)
-    interv_batch = Intervention.batched(input_batch, input_keys,
-                                        intervention={"node1[:,:2]": interv_input})
+    interv_batch = Intervention.batched(input_batch, intervention={"node1[:,:2]": interv_input})
     # notes: location must match batched format
 
     before, after = g2.intervene(interv_batch)

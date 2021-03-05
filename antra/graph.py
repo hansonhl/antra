@@ -8,9 +8,6 @@ from .location import Location
 from typing import Dict, Any, Union
 from collections import deque
 
-# TODO: add type hints
-# TODO: index of input keys to reduce cache space
-
 class ComputationGraph:
     def __init__(self, root: GraphNode):
         """
@@ -21,7 +18,7 @@ class ComputationGraph:
         """
         self.root = root
         self.nodes = {}
-        self.leaves = self.validate_graph()
+        self.leaves = self._validate_graph()
 
     def get_nodes_and_dependencies(self):
         nodes = [node_name for node_name in self.nodes]
@@ -73,7 +70,7 @@ class ComputationGraph:
                 result.append({viable_node:index})
         return result
 
-    def validate_graph(self):
+    def _validate_graph(self):
         """Validate the structure of the computational graph
 
         :raise: `RuntimeError` if something goes wrong
@@ -96,9 +93,9 @@ class ComputationGraph:
         add_node(self.root)
         return leaves
 
-    def validate_inputs(self, inputs: GraphInput):
+    def _prepare_inputs(self, inputs: GraphInput):
         """
-        Check if an input is provided for each leaf node
+        Prepare inputs
         :raise: `RuntimeError` if something goes wrong
         """
         for node in self.leaves:
@@ -106,13 +103,13 @@ class ComputationGraph:
                 raise RuntimeError(
                     "input value not provided for leaf node %s" % node.name)
 
-    def validate_interv(self, intervention: Intervention):
+    def _validate_interv(self, intervention: Intervention):
         """
         Validates an experiment relevant to this `ComputationGraph`
         :param intervention:  intervention experiment in question
         :raise: `RuntimeError` if something goes wrong
         """
-        self.validate_inputs(intervention.base)
+        self._prepare_inputs(intervention.base)
 
         if not intervention.intervention:
             raise RuntimeError("Must specify some kind of intervention!")
@@ -130,7 +127,7 @@ class ComputationGraph:
         :param inputs:
         :return:
         """
-        self.validate_inputs(inputs)
+        self._prepare_inputs(inputs)
         return self.root.compute(inputs)
 
     def _iterative_compute(self, inputs: GraphInput):
@@ -153,7 +150,7 @@ class ComputationGraph:
         """
         base_res = self.compute(intervention.base)
 
-        self.validate_interv(intervention)
+        self._validate_interv(intervention)
         intervention.find_affected_nodes(self)
 
         interv_res = self.root.compute(intervention)
