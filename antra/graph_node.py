@@ -15,8 +15,9 @@ class GraphNode:
     def __init__(self, *args, name: str=None, forward: Callable=None, cache_results: bool=True):
         """Construct a computation graph node, can be used as function decorator
 
-        This constructor is invoked when `@GraphNode()` decorates a function.
-        When used as a decorator, the `*args` become parameters of the decorator
+        This constructor is called first when `@GraphNode()` decorates a function.
+        When used as a decorator, the positional parameters of the decorator
+        become the `*args`.
 
         :param args: GraphNode objects that are the children of this node
         :param name: the name of the node. If not given, this will be the name

@@ -2,3 +2,5 @@ __pycache__/
 .pytest_cache/
 .idea/
 *.egg-info
+api_key.txt
+tests/bert_compgraph/data/
