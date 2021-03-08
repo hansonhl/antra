@@ -2,6 +2,8 @@ import pytest
 import torch
 from antra import GraphInput, Intervention, LOC
 
+from .utils import setup_intervention
+
 @pytest.fixture()
 def base_input():
     d = {str(x): torch.randn(10) for x in range(3)}
@@ -50,49 +52,32 @@ def test_init_base_and_interv(base_input, interv1):
 
 
 def test_init_with_loc1(base_input, interv1_loc):
-    i = Intervention(base_input, intervention=interv1_loc)
+    interv_dict = {"node[5 :10]": torch.randn(5)}
+    i = Intervention(base_input, intervention=interv_dict)
     assert "node" in i.intervention
     assert i.location["node"] == LOC[5:10]
 
 
 def test_init_with_loc2(base_input, interv1, loc1):
-    i = Intervention(base_input, intervention=interv1, location=loc1)
+    interv_dict = {"node": torch.randn(10)}
+    loc_dict = {"node": LOC[5:10]}
+    i = Intervention(base_input, intervention=interv_dict, location=loc_dict)
     assert i.location["node"] == LOC[5:10]
 
 
-def test_init_with_loc3(base_input, interv1_loc, loc1):
-    i = Intervention(base_input, intervention=interv1_loc, location=loc1)
-    assert i.location["node"] == LOC[5:10]
+# def test_init_with_loc3(base_input, interv1_loc, loc1):
+#     interv_dict = {"node[5 :10]": torch.randn(5)}
+#     loc_dict = {"node": LOC[5:10]}
+#     i = Intervention(base_input, intervention=interv_dict, location=loc_dict)
+#     assert i.location["node"] == LOC[5:10]
 
 
 def test_init_with_loc4(base_input, interv1_loc, interv2, loc2):
     interv1_loc.update(interv2)
-    i = Intervention(base_input, intervention=interv1_loc, location=loc2)
+    interv_dict = {"node[5 :10]": torch.randn(5), "node2": torch.randn(10)}
+    loc_dict = {"node2": LOC[0,...,:]}
+    i = Intervention(base_input, intervention=interv_dict, location=loc_dict)
     assert i.location["node2"] == LOC[0, ..., :]
-
-
-# def test_setter_intervention(base_input, interv1, interv1_loc):
-#     i = Intervention(base_input)
-#     i.intervention = interv1
-#     assert "node" in i.intervention
-#     assert len(i.location) == 0
-#     interv_input1 = i.intervention
-#
-#     # replace with intervention containing loc
-#     i.intervention = interv1_loc
-#     interv_input2 = i.intervention
-#     assert "node" in i.intervention
-#     assert i.location["node"] == LOC[5:10]
-#
-#     # i.intervention should be an immutable GraphInput object; setting it should
-#     # produce a new instance
-#     assert interv_input1 is not interv_input2
-
-
-# def test_setter_locs(base_input, interv1, loc1):
-#     i = Intervention(base_input, intervention=interv1)
-#     i.location = loc1
-#     assert i.location["node"] == LOC[5:10]
 
 
 def test_set_intervention(base_input):
@@ -107,8 +92,7 @@ def test_set_intervention(base_input):
     # i.intervention should be an immutable GraphInput object; setting it should
     # produce a new instance
     assert interv_input is not interv_input2
-    assert len(i.intervention["node"]) == 10 \
-           and len(i.intervention["node2"]) == 10
+    assert len(i.intervention["node"]) == 10 and len(i.intervention["node2"]) == 10
 
 
 def test_loc(base_input, interv1_loc):
@@ -127,3 +111,49 @@ def test_loc(base_input, interv1_loc):
 #
 #     assert all(t.is_cuda for t in i.base.values.values())
 #     assert all(v.is_cuda for v in i.intervention.values.values())
+
+def test_double_set():
+    i = Intervention({"leaf1": torch.tensor([1,2,3])})
+    i.set_intervention("node", torch.tensor([2]))
+    i.set_location("node", LOC[1])
+    i.set_intervention("node", torch.tensor([3]))
+    i.set_location("node", LOC[2])
+
+    assert i.intervention["node"] == torch.tensor([3])
+    assert i.location["node"] == LOC[2]
+
+def test_one_node_multi_interv(setup_intervention):
+    input_dict = {"leaf1": torch.tensor([-2., 3., 1., ])}
+    interv_dict = {"h1": [torch.tensor([-6.]), torch.tensor([10.]), torch.tensor([1.])]}
+    loc_dict = {"h1": [0, 2, 1]}
+
+    i = setup_intervention(input_dict, interv_dict, loc_dict)
+
+    assert len(i.intervention["h1"]) == 3
+    assert i.intervention["h1"][0] == torch.tensor([-6.])
+    assert i.intervention["h1"][1] == torch.tensor([10.])
+    assert i.intervention["h1"][2] == torch.tensor([1.])
+    assert i.location["h1"] == [0, 2, 1]
+
+def test_multi_node_multi_interv(setup_intervention):
+    input_dict = {"leaf1": torch.tensor([-2., 3., 1.])}
+    interv_dict = {"h1": [torch.tensor([-6.]), torch.tensor([10.]), torch.tensor([1.])],
+                   "node": torch.tensor([1., 2., 3.]),
+                   "h2": [torch.tensor([-3.]), torch.tensor([-3., -2.])]}
+    loc_dict = {"h1": [0, 2, 1], "node": LOC[1:4], "h2": [1, LOC[3:5]]}
+
+    i = setup_intervention(input_dict, interv_dict, loc_dict)
+
+    assert len(i.intervention["h1"]) == 3
+    assert i.intervention["h1"][0] == torch.tensor([-6.])
+    assert i.intervention["h1"][1] == torch.tensor([10.])
+    assert i.intervention["h1"][2] == torch.tensor([1.])
+    assert i.location["h1"] == [0, 2, 1]
+
+    assert len(i.intervention["h2"]) == 2
+    assert i.intervention["h2"][0] == torch.tensor([-3.])
+    assert torch.allclose(i.intervention["h2"][1], torch.tensor([-3., -2.]))
+    assert i.location["h2"] == [1, LOC[3:5]]
+
+    assert torch.allclose(i.intervention["node"], torch.tensor([1., 2., 3.]))
+    assert i.location["node"] == LOC[1:4]

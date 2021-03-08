@@ -2,6 +2,7 @@ import re
 
 from .location import Location
 from .graph_input import GraphInput
+from .utils import serialize, serialize_batch
 
 import logging
 
@@ -16,7 +17,7 @@ class Intervention:
                  intervention: Union[Dict, GraphInput]=None,
                  location: Dict=None,
                  cache_results: bool=True, cache_base_results:bool=True,
-                 batched: bool=False, batch_dim: int=0, keys=None):
+                 batched: bool=False, batch_dim: int=0):
         """ Construct an intervention experiment.
 
         :param base: `GraphInput` or `dict(str->Any)` containing the "base"
@@ -35,7 +36,6 @@ class Intervention:
             inputs, i.e. the value of the dict must be a sequence.
         :param batch_dim: If inputs are batched and are pytorch tensors, the
             dimension for the batch
-        :param keys: A unique key/hash value for each input value in the batch
         """
         intervention = {} if intervention is None else intervention
         location = {} if location is None else location
@@ -45,31 +45,11 @@ class Intervention:
         self.cache_results = cache_results
         self.cache_base_results = cache_base_results
         self.affected_nodes = None
+        self.multi_loc_nodes = set()
         self.batched = batched
         self.batch_dim = batch_dim
 
         self._setup(base, intervention, location)
-
-
-    def _get_keys(self):
-        # assume at this point base and intervention are already converted into
-        # GraphInput objects, which already have
-        assert isinstance(self.base, GraphInput)
-        assert isinstance(self.intervention, GraphInput)
-
-        if not self.batched:
-            loc_key = tuple(sorted(
-                (k, Location.loc_to_str(v)) for k, v in self.location.items()))
-            return (self.base.keys, self.intervention.keys, loc_key)
-        else:
-            if self.intervention.is_empty():
-                return self.base.keys
-            else:
-                loc_key = tuple(sorted((k, Location.loc_to_str(v)) for k, v in self.location.items()))
-                base_key, interv_key = self.base.keys, self.intervention.keys
-                if len(base_key) != len(interv_key):
-                    raise RuntimeError("Must provide the same number of inputs in batch for base and intervention")
-                return [(b, i, loc_key) for b, i in zip(self.base.keys, self.intervention.keys)]
 
 
     @classmethod
@@ -92,11 +72,20 @@ class Intervention:
                 )
             self._base = base
 
+        multi_loc_nodes = self.multi_loc_nodes
         if location is not None:
-            # specifying any value that is not None will overwrite self._locs
-            location = {name: Location.process(loc) for name, loc in
-                        location.items()}
+            # specifying any value that is not None, including empty dict {}, will overwrite self._location
+            new_location = {}
+            multi_loc_nodes = set()
+            for node_name, loc in location.items():
+                if isinstance(loc, list):
+                    new_location[node_name] = [Location.process(l) for l in loc]
+                    multi_loc_nodes.add(node_name)
+                else:
+                    new_location[node_name] = Location.process(loc)
+            location = new_location
         else:
+            # do not overwrite self._location
             location = self._location
 
         if intervention is not None:
@@ -107,27 +96,57 @@ class Intervention:
             loc_pattern = re.compile(r"\[.*]")
             to_delete = []
             to_add = {}
-            for name, value in intervention.items():
+
+            for full_name, value in intervention.items():
                 # parse any index-like expressions in name
-                loc_search = loc_pattern.search(name)
+                loc_search = loc_pattern.search(full_name)
                 if loc_search:
-                    true_name = name.split("[")[0]
+                    node_name = full_name.split("[")[0] # bare node name without indexing
                     loc_str = loc_search.group().strip("[]")
                     loc = Location.parse_str(loc_str)
-                    to_delete.append(name)
-                    to_add[true_name] = value
-                    location[true_name] = loc
+                    to_delete.append(full_name)
+
+                    if node_name in intervention:
+                        to_add[node_name] = intervention[node_name]
+
+                    if node_name not in to_add:
+                        to_add[node_name] = value
+                    else:
+                        # use list of values for different locations in same node
+                        prev_values = to_add[node_name] if isinstance(to_add[node_name], list) else [to_add[node_name]]
+                        prev_values.append(value)
+                        to_add[node_name] = prev_values
+                        multi_loc_nodes.add(node_name)
+
+                    if node_name not in location:
+                        location[node_name] = loc
+                    else:
+                        # different locations in same node
+                        prev_locs = location[node_name] if isinstance(location[node_name], list) else [location[node_name]]
+                        prev_locs.append(loc)
+                        location[node_name] = prev_locs
+                        multi_loc_nodes.add(node_name)
+
 
             # remove indexing part in names
-            for name in to_delete:
-                intervention.pop(name)
+            for node_name in to_delete:
+                intervention.pop(node_name)
             intervention.update(to_add)
 
+            if multi_loc_nodes:
+                self._validate_multi_loc(intervention, location, multi_loc_nodes)
+
+            interv_keys = self._get_interv_graphinput_keys(intervention, location, multi_loc_nodes)
+
             self._intervention = GraphInput(
-                intervention, batched=self.batched, batch_dim=self.batch_dim
+                intervention, batched=self.batched, batch_dim=self.batch_dim,
+                keys=interv_keys
             )
 
+        self.multi_loc_nodes = multi_loc_nodes
+
         self._location = location
+
         if self.location and not self.cache_base_results or not self.base.cache_results:
             logger.warning(f"To intervene on a indexed location, results of the base run must be cached, "
                            f"but self.cache_base_results is set to false. Automatically converting it to True")
@@ -140,6 +159,49 @@ class Intervention:
 
         # setup keys
         self.keys = self._get_keys()
+
+    def _validate_multi_loc(self, intervention, location, multi_loc_nodes):
+        # validate multi-location nodes
+        for node_name in multi_loc_nodes:
+            if not isinstance(location[node_name], list) or \
+                    not isinstance(intervention[node_name], list) or \
+                    len(location[node_name]) != len(intervention[node_name]):
+                raise ValueError(
+                    f"Mismatch between number of locations and values for node {node_name}")
+
+    def _get_interv_graphinput_keys(self, intervention, location, multi_loc_nodes):
+        dict_for_keys = {}
+        for node_name in intervention:
+            if node_name not in multi_loc_nodes:
+                k = node_name
+                if node_name in location:
+                    k += Location.loc_to_str(location[node_name], add_brackets=True)
+                dict_for_keys[k] = intervention[node_name]
+            else:
+                for loc, value in zip(location[node_name], intervention[node_name]):
+                    k = node_name + Location.loc_to_str(loc, add_brackets=True)
+                    dict_for_keys[k] = value
+        if self.batched:
+            return serialize_batch(dict_for_keys, dim=self.batch_dim)
+        else:
+            return serialize(dict_for_keys)
+
+    def _get_keys(self):
+        # assume at this point base and intervention are already converted into
+        # GraphInput objects, which should have keys
+        assert isinstance(self.base, GraphInput)
+        assert isinstance(self.intervention, GraphInput)
+
+        if not self.batched:
+            return (self.base.keys, self.intervention.keys)
+        else:
+            if self.intervention.is_empty():
+                return self.base.keys
+            else:
+                base_key, interv_key = self.base.keys, self.intervention.keys
+                if len(base_key) != len(interv_key):
+                    raise RuntimeError("Must provide the same number of inputs in batch for base and intervention")
+                return [(b, i) for b, i in zip(self.base.keys, self.intervention.keys)]
 
     @property
     def base(self):

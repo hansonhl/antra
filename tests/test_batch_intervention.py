@@ -76,16 +76,17 @@ def test_batch_interv_keys_0():
     input1 = torch.tensor([[0., 1., 2.,], [10., 11., 12.,], [20., 21., 22.]])
     input2 = torch.tensor([[100., 101., 102.], [110., 111., 112.,], [120., 121., 122.]])
     input_values = GraphInput.batched({"leaf1": input1, "leaf2": input2})
-    interv_values = {"h2": torch.ones(3, 2)}
+    interv_values = {"h2[:2]": torch.ones(3, 2)}
     batched_interv = Intervention.batched(input_values, interv_values)
 
     for ex, i1, i2 in zip(batched_interv.keys, input1, input2):
-        base_key, interv_key, loc_key = ex
+        base_key, interv_key = ex
         assert len(base_key) == 2
         assert base_key[0][0] == "leaf1" and base_key[1][0] == "leaf2"
         assert torch.allclose(torch.tensor(base_key[0][1]), i1)
         assert torch.allclose(torch.tensor(base_key[1][1]), i2)
         assert torch.allclose(torch.tensor(interv_key[0][1]), torch.tensor([1.,1.]))
+        assert interv_key[0][0] == "h2[:2:]"
 
     base_keys = batched_interv.base.keys
     for base_key, i1, i2 in zip(base_keys, input1, input2):
@@ -93,7 +94,6 @@ def test_batch_interv_keys_0():
         assert base_key[0][0] == "leaf1" and base_key[1][0] == "leaf2"
         assert torch.allclose(torch.tensor(base_key[0][1]), i1)
         assert torch.allclose(torch.tensor(base_key[1][1]), i2)
-
 
 
 def test_batch_one_interv_dim0_0():
@@ -155,7 +155,7 @@ def setup_intervention(request):
             input_values = GraphInput.batched({"leaf1": input1, "leaf2": input2}, batch_dim=batch_dim)
 
         if loc_method == "interv_str":
-            interv_node_name += Location.loc_to_str(loc)
+            interv_node_name += Location.loc_to_str(loc, add_brackets=True)
 
         if interv_method == "dict":
             interv_values = {interv_node_name: interv}
