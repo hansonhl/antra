@@ -109,18 +109,18 @@ def generate_bert_compgraph(bert_model, final_node="pool"):
             inputs_embeds=input_dict["inputs_embeds"]
         )
 
-    hidden_node = embed
+    hidden_layer = embed
 
     # Bert Layers
     for i in range(len(bert_model.encoder.layer)):
         f = _generate_bert_layer_fxn(bert_model.encoder.layer[i], i)
-        hidden_node = GraphNode(hidden_node, input_preparation,
+        hidden_layer = GraphNode(hidden_layer, input_preparation,
                                 name=f"bert_layer_{i}",
                                 forward=f)
 
     # Output pooling, if specified
     if bert_model.pooler is not None and final_node == "pool":
-        @GraphNode(hidden_node)
+        @GraphNode(hidden_layer)
         def pool(h):
             return bert_model.pooler(h)
         return pool
@@ -128,8 +128,8 @@ def generate_bert_compgraph(bert_model, final_node="pool"):
     elif final_node == "pool":
         raise ValueError("Final node cannot be pool because the given BERT model does not have a final pool layer!")
 
-    elif final_node == "sequence":
-        return hidden_node
+    elif final_node == "bert_layer_11":
+        return hidden_layer
     else:
         raise ValueError(f"Invalid final node specification: {final_node}!")
 
@@ -145,7 +145,7 @@ class BertGraphInput(GraphInput):
         )
 
 class BertCompGraph(ComputationGraph):
-    def __init__(self, bert_model):
+    def __init__(self, bert_model, final_node="pool"):
         self.bert_model = bert_model
-        root = generate_bert_compgraph(self.bert_model)
+        root = generate_bert_compgraph(self.bert_model, final_node=final_node)
         super().__init__(root)
