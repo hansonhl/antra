@@ -158,6 +158,9 @@ class ComputationGraph:
         return base_res, interv_res
 
     def clear_caches(self):
+        """ Clear all caches.
+        :return: None
+        """
         def clear_cache(node):
             node.clear_caches()
             for c in node.children:
@@ -165,32 +168,29 @@ class ComputationGraph:
 
         clear_cache(self.root)
 
-    def compute_node(self, node_name: str, x: Union[GraphInput, Intervention]):
+    def compute_node(self, node_name: str, x: GraphInput):
+        """ Compute the value of a node in the graph without any interventions
+
+        :param node_name: name of node
+        :param x: GraphInput object
+        :return: output from node
+        """
+        return self.nodes[node_name].compute(x)
+
+    def intervene_node(self, node_name: str, x: Intervention):
+        """ Compute the value of a node during an intervention
+
+        :param node_name: name of node
+        :param x: Intervention object
+        :return: output from node
+        """
         node = self.nodes[node_name]
-        res = None
+        base_res = node.compute(x.base)
+        self._validate_interv(x)
+        x.find_affected_nodes(self)
 
-        if isinstance(x, GraphInput):
-            res = node.compute(x)
-            # if x not in node.base_cache:
-            #     self.compute(x)
-            # res = node.base_cache[x]
-        elif isinstance(x, Intervention):
-            x.find_affected_nodes(self)
-            if x.base not in node.base_cache or x not in node.interv_cache:
-                base_res = self.compute(x.base)
-                self.root.compute(x)
-
-            res = node.compute(x)
-            # if node.name not in x.affected_nodes:
-            #     res = node.base_cache[x.base]
-            # else:
-            #     res = node.interv_cache[x]
-        else:
-            raise RuntimeError("compute_node requires a GraphInput or Intervention object!")
-
-        # if self.root_output_device:
-        #     res = res.to(self.root_output_device)
-        return res
+        interv_res = node.compute(x)
+        return base_res, interv_res
 
     def get_state_dict(self):
         return {

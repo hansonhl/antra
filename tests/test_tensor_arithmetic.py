@@ -4,7 +4,11 @@ import torch
 from antra import ComputationGraph, GraphNode, GraphInput, Intervention, LOC
 
 def eq(g, input, node_name, other):
-    return torch.all(g.compute_node(node_name, input) == other)
+    return torch.allclose(g.compute_node(node_name, input), other)
+
+def interv_eq(g, interv, node_name, other):
+    _, res_after = g.intervene_node(node_name, interv)
+    return torch.allclose(res_after, other)
 
 @pytest.fixture
 def tensor_input1():
@@ -100,7 +104,7 @@ def test_tensor_arithmetic_interv2(tensor_input1, tensor_arithmetic_graph):
 
     assert i.affected_nodes == {"h2", "add", "relu", "root"}
     assert before == 38., after == 30.
-    assert eq(g, i, "h2", torch.tensor([2., -10., 2.]))
+    assert interv_eq(g, i, "h2", torch.tensor([2., -10., 2.]))
     assert eq(g, i.base, "h2", torch.tensor([2., -2., 2.]))
 
 
@@ -115,7 +119,7 @@ def test_tensor_arithmetic_interv3(tensor_input1, tensor_arithmetic_graph):
 
     assert i.affected_nodes == {"h2", "add", "relu", "root"}
     assert before == 38. and after == 18.
-    assert eq(g, i, "h2", torch.tensor([2., -10., -10.]))
+    assert interv_eq(g, i, "h2", torch.tensor([2., -10., -10.]))
 
 
 def test_multiple_interv(tensor_input1, tensor_arithmetic_graph):
@@ -129,7 +133,7 @@ def test_multiple_interv(tensor_input1, tensor_arithmetic_graph):
 
     assert i.affected_nodes == {"h1", "h2", "add", "relu", "root"}
     assert before == 38. and after == 22.
-    assert eq(g, i, "h1", torch.tensor([-6., 18., 12.]))
-    assert eq(g, i, "h2", torch.tensor([2., -10., 2.]))
+    assert interv_eq(g, i, "h1", torch.tensor([-6., 18., 12.]))
+    assert interv_eq(g, i, "h2", torch.tensor([2., -10., 2.]))
     assert eq(g, i.base, "h1", torch.tensor([6., 18., 12.]))
     assert eq(g, i.base, "h2", torch.tensor([2., -2., 2.]))

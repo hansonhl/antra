@@ -16,7 +16,7 @@ class Intervention:
                  intervention: Union[Dict, GraphInput]=None,
                  location: Dict=None,
                  cache_results: bool=True, cache_base_results:bool=True,
-                 batched: bool=False, batch_dim: int=0):
+                 batched: bool=False, batch_dim: int=0, keys=None):
         """ Construct an intervention experiment.
 
         :param base: `GraphInput` or `dict(str->Any)` containing the "base"

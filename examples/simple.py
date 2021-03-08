@@ -83,7 +83,7 @@ if __name__ == "__main__":
     input2 = GraphInput({"x": torch.tensor([10, 20, 30]),
                         "y": torch.tensor([1, 1, 1])})
     interv2 = Intervention(input2)
-    interv2["node2[:2]"] = torch.tensor([101, 201])
+    interv2.set_intervention("node2[:2]", torch.tensor([101, 201]))
 
     before, after = g2.intervene(interv2)
     print("Before:", before, "after:", after)

@@ -133,7 +133,8 @@ def test_singleton_interv(singleton_graph, input_leaf1):
     before, after = singleton_graph.intervene(interv)
 
     assert before == 111 and after == 100
-    assert singleton_graph.compute_node("node1", interv) == 100
+    interv_before, interv_after = singleton_graph.intervene_node("node1", interv)
+    assert interv_after == 100
 
     assert "node1" in interv.affected_nodes and len(interv.affected_nodes) == 1
 
@@ -167,10 +168,10 @@ def test_arithmetic_graph1_interv(arithmetic_graph1, input_arith1):
     assert arithmetic_graph1.compute_node("node1", input_arith1) == 111
     assert arithmetic_graph1.compute_node("node2", input_arith1) == 200
 
-    assert arithmetic_graph1.compute_node("child1", i) == 200
-    assert arithmetic_graph1.compute_node("child2", i) == -100
-    assert arithmetic_graph1.compute_node("node1", i) == 100
-    assert arithmetic_graph1.compute_node("node2", i) == 200
+    assert arithmetic_graph1.intervene_node("child1", i)[1] == 200
+    assert arithmetic_graph1.intervene_node("child2", i)[1] == -100
+    assert arithmetic_graph1.intervene_node("node1", i)[1] == 100
+    assert arithmetic_graph1.intervene_node("node2", i)[1] == 200
 
 
 def test_arithmetic_graph2(arithmetic_graph2, input_leaf1):
@@ -196,10 +197,11 @@ def test_arithmetic_graph2_interv(arithmetic_graph2, input_leaf1):
     assert arithmetic_graph2.compute_node("branch3", input_leaf1) == 225
     assert arithmetic_graph2.compute_node("node1", input_leaf1) == 111
 
-    assert arithmetic_graph2.compute_node("child2", i) == 403
-    assert arithmetic_graph2.compute_node("child1", i) == 200
-    assert arithmetic_graph2.compute_node("branch3", i) == 203
-    assert arithmetic_graph2.compute_node("node1", i) == 111
+
+    assert arithmetic_graph2.intervene_node("child2", i)[1] == 403
+    assert arithmetic_graph2.intervene_node("child1", i)[1] == 200
+    assert arithmetic_graph2.intervene_node("branch3", i)[1] == 203
+    assert arithmetic_graph2.intervene_node("node1", i)[1] == 111
 
 # TODO: Test multiple sites of intervention
 

@@ -297,25 +297,20 @@ interv1.set_intervention("node1", torch.tensor([-20, -20, -20]))
 
 ### Computing the intervention
 
-Use the `g.intervene()` method to performing the intervention on the graph. It returns two root outputs, computed
-without and with the intervention respectively.
+Use the `g.intervene()` method to performing the intervention on the graph. It returns two outputs from the root node, 
+computed without and with the intervention respectively.
 ```python
 # running an intervention
-base_result, interv_result = g.intervene(interv)
-print(base_result, interv_result) # -63, 66
+res_before, res_after = g.intervene(interv)
+print(res_before, res_after) # -63, 66
 ```
-To retrieving intermediate node values during the intervention, use `g.compute_node()`, which takes in a node name and 
-an `Intervention` object. You can also retrieve the intermediate node value computed without the intervention by passing
-in the `GraphInput` object of the intervention's base input.
+To retrieving intermediate node values during the intervention, use `g.intervene_node()`, which takes in a node name and 
+an `Intervention` object. It will return both the result before and after the intervention.
 ```python
 # computing intermediate values
-node2_interv_value = g.compute_node("node2", interv)
-print(node2_interv_value) # tensor([22,22,22])
-
-# the following are equivalent
-node2_base_value = g.compute_node("node2", base_graph_input) # base_graph_input defined above
-node2_base_value = g.compute_node("node2", interv.base) 
-print(node2_base_value) # tensor([20, 40, 60])
+node2_before, node2_after = g.intervene_node("node2", interv)
+print(node2_before) # tensor([20, 40, 60])
+print(node2_after) # tensor([22,22,22])
 ```
 
 Note that `antra` can detect which nodes in the computation graph are affected by the intervention, so that it does not

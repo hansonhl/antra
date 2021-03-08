@@ -125,9 +125,13 @@ def test_batch_one_interv_dim0_0():
         r_prime = g.relu_func(a_prime)
         interv_expected = g.root_func(r_prime)
 
-        assert torch.allclose(h1, g.compute_node("h1", batched_interv))
-        assert torch.allclose(a_prime, g.compute_node("add", batched_interv))
-        assert torch.allclose(r_prime, g.compute_node("relu", batched_interv))
+        h1_before, h1_after = g.intervene_node("h1", batched_interv)
+        add_before, add_after = g.intervene_node("add", batched_interv)
+        r_before, r_after = g.intervene_node("relu", batched_interv)
+
+        assert torch.allclose(h1, h1_after)
+        assert torch.allclose(a_prime, add_after)
+        assert torch.allclose(r_prime, r_after)
 
         assert torch.allclose(interv_res, interv_expected)
 
@@ -211,12 +215,16 @@ def test_batch_one_interv_dim0_1(setup_intervention):
         r_prime = g.relu_func(a_prime)
         interv_expected = g.root_func(r_prime)
 
-        assert torch.allclose(h1, g.compute_node("h1", batched_interv))
-        assert torch.allclose(h1, g.compute_node("h1", batched_interv.base))
-        assert torch.allclose(a_prime, g.compute_node("add", batched_interv))
-        assert torch.allclose(a, g.compute_node("add", batched_interv.base))
-        assert torch.allclose(r_prime, g.compute_node("relu", batched_interv))
-        assert torch.allclose(r, g.compute_node("relu", batched_interv.base))
+        h1_before, h1_after = g.intervene_node("h1", batched_interv)
+        add_before, add_after = g.intervene_node("add", batched_interv)
+        r_before, r_after = g.intervene_node("relu", batched_interv)
+
+        assert torch.allclose(h1, h1_after)
+        assert torch.allclose(h1, h1_before)
+        assert torch.allclose(a_prime, add_after)
+        assert torch.allclose(a, add_before)
+        assert torch.allclose(r_prime, r_after)
+        assert torch.allclose(r, r_before)
         assert torch.allclose(interv_res, interv_expected)
 
 class TensorArithmeticGraphDim1(ComputationGraph):
@@ -296,10 +304,14 @@ def test_batch_one_interv_dim1(setup_intervention):
         r_prime = g.relu_func(a_prime)
         interv_expected = g.root_func(r_prime)
 
-        assert torch.allclose(h1, g.compute_node("h1", batched_interv))
-        assert torch.allclose(h1, g.compute_node("h1", batched_interv.base))
-        assert torch.allclose(a_prime, g.compute_node("add", batched_interv))
-        assert torch.allclose(a, g.compute_node("add", batched_interv.base))
-        assert torch.allclose(r_prime, g.compute_node("relu", batched_interv))
-        assert torch.allclose(r, g.compute_node("relu", batched_interv.base))
+        h1_before, h1_after = g.intervene_node("h1", batched_interv)
+        add_before, add_after = g.intervene_node("add", batched_interv)
+        r_before, r_after = g.intervene_node("relu", batched_interv)
+
+        assert torch.allclose(h1, h1_after)
+        assert torch.allclose(h1, h1_before)
+        assert torch.allclose(a_prime, add_after)
+        assert torch.allclose(a, add_before)
+        assert torch.allclose(r_prime, r_after)
+        assert torch.allclose(r, r_before)
         assert torch.allclose(interv_res, interv_expected)
