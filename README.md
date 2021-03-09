@@ -55,10 +55,17 @@ computation graph, at the expense of extra memory space.
 of each node's functions. Optionally, if you have `pytorch` installed, `antra` can perform computations 
 and interventions in batches, which is useful for analyzing numerically intensive systems such as neural networks.
 
-You can see some simple examples in the `examples/` folder in this repo.
-
 Note that `antra`'s primary purpose is to provide a lightweight scaffolding to convert an algorithm/program/computation process
 into a computation graph and perform interventions on it. It does not perform back-propogation on its own.
+
+## Examples
+
+To get started quickly, you can see some examples in the `examples/` folder of this repo.
+
+- `examples/simple.py` shows how to define a computation graph and run interventions on it. 
+- `examples/bert.ipynb` is a notebook showing how to use `antra`'s built-in functionality `antra.compgraphs.bert` to 
+   convert a `huggingface` BERT model into a computation graph and do interventions on it.
+
 
 ## Defining a computation graph
 
