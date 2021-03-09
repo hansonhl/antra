@@ -64,7 +64,7 @@ def test_bert_intervention(sentiment_data, bert_model):
 
                 gi = BertGraphInput(batch)
                 base_res = g.compute(gi)
-                layer_11_output = g.compute_node("bert_layer_11", gi)
+                layer_11_output = g.compute_node("bert_layer_11", gi).detach().clone()
 
                 interv_values = torch.randn(batch_size, 50)
                 interv_dict = {"bert_layer_11[:,0,:50]": interv_values}
@@ -77,5 +77,9 @@ def test_bert_intervention(sentiment_data, bert_model):
                 pooler_input = layer_11_output[:,0]
                 dense_out = model.pooler.dense(pooler_input)
                 expected_after = model.pooler.activation(dense_out)
-                for interv_res, expected_res in zip(interv_after, expected_after):
-                    assert torch.allclose(interv_res, expected_res)
+
+                assert torch.allclose(interv_after, expected_after, atol=1e-06, rtol=1e-04)
+                # for interv_res, expected_res in zip(interv_after, expected_after):
+                #     assert torch.allclose(interv_res, expected_res)
+
+

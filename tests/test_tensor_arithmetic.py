@@ -149,3 +149,81 @@ def test_tensor_arithmetic_interv3(setup_intervention, tensor_arithmetic_graph):
     assert before == 38. and after == 18.
     assert interv_eq(g, i, "h2", torch.tensor([2., -10., -10.]))
 
+def test_one_node_multi_interv(setup_intervention, tensor_arithmetic_graph):
+    g = tensor_arithmetic_graph
+    input_dict = {"leaf1": torch.tensor([-2., 3., 1., ])}
+    interv_dict = {"h2": [torch.tensor([-1.]), torch.tensor([1.])]}
+    loc_dict = {"h2": [0, 2]}
+
+    i = setup_intervention(input_dict, interv_dict, loc_dict)
+
+    before, after = g.intervene(i)
+
+    x = torch.tensor([-2, 3., 1.])
+    l1 = g.leaf1func(x)
+    h1 = g.h1func(l1)
+    h2_before = g.h2func(l1)
+    add_before = g.addfunc(h1, h2_before)
+    relu_before = g.relufunc(add_before)
+    res_before = g.sumfunc(relu_before)
+
+    h2_after = h2_before.detach().clone()
+    h2_after[0] = -1.
+    h2_after[2] = 1.
+
+    add_after = g.addfunc(h1, h2_after)
+    relu_after = g.relufunc(add_after)
+    res_after = g.sumfunc(relu_after)
+
+    pairs = [
+        (res_before, before),
+        (res_after, after),
+        (add_before, g.intervene_node("add", i)[0]),
+        (add_after, g.intervene_node("add", i)[1]),
+        (relu_before, g.intervene_node("relu", i)[0]),
+        (relu_after, g.intervene_node("relu", i)[1])
+    ]
+    for x, y in pairs:
+        assert torch.allclose(x, y)
+
+def test_multi_node_multi_interv(setup_intervention, tensor_arithmetic_graph):
+    g = tensor_arithmetic_graph
+    input_dict = {"leaf1": torch.tensor([-2., 3., 1., ])}
+    interv_dict = {"h2": [torch.tensor([-1.]), torch.tensor([1.])],
+                   "add": [torch.tensor([1.]), torch.tensor([2.])]}
+    loc_dict = {"h2": [0, 2], "add": [0, 2]}
+
+    i = setup_intervention(input_dict, interv_dict, loc_dict)
+
+    before, after = g.intervene(i)
+
+    x = torch.tensor([-2, 3., 1.])
+    l1 = g.leaf1func(x)
+    h1 = g.h1func(l1)
+    h2_before = g.h2func(l1)
+    add_before = g.addfunc(h1, h2_before)
+    relu_before = g.relufunc(add_before)
+    res_before = g.sumfunc(relu_before)
+
+    h2_after = h2_before.detach().clone()
+    h2_after[0] = -1.
+    h2_after[2] = 1.
+
+    add_after = g.addfunc(h1, h2_after)
+    add_after = add_after.detach().clone()
+    add_after[0] = 1.
+    add_after[2] = 2.
+
+    relu_after = g.relufunc(add_after)
+    res_after = g.sumfunc(relu_after)
+
+    pairs = [
+        (res_before, before),
+        (res_after, after),
+        (add_before, g.intervene_node("add", i)[0]),
+        (add_after, g.intervene_node("add", i)[1]),
+        (relu_before, g.intervene_node("relu", i)[0]),
+        (relu_after, g.intervene_node("relu", i)[1])
+    ]
+    for x, y in pairs:
+        assert torch.allclose(x, y)

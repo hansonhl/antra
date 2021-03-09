@@ -2,7 +2,8 @@ import pytest
 import torch
 from antra import GraphInput, Intervention, LOC
 
-from .utils import setup_intervention
+import itertools
+from .utils import setup_intervention, setup_intervention_func_for_fixture
 
 @pytest.fixture()
 def base_input():
@@ -157,3 +158,63 @@ def test_multi_node_multi_interv(setup_intervention):
 
     assert torch.allclose(i.intervention["node"], torch.tensor([1., 2., 3.]))
     assert i.location["node"] == LOC[1:4]
+
+
+
+
+interv_construction_types = [("dict", "GraphInput"),
+                             ("dict",),
+                             ("dict", "interv_str",)]
+params = [t for t in itertools.product(*interv_construction_types) ]
+params += [("dict", "set", "interv_str"), ("GraphInput", "set", "interv_str")]
+idfn = lambda t: "/".join(t)
+@pytest.fixture(params=params, ids=idfn)
+def setup_multi_loc_batched_intervention(request):
+    return setup_intervention_func_for_fixture(request)
+
+def test_multi_node_multi_interv_batched(setup_multi_loc_batched_intervention):
+    input_dict = {"leaf1": torch.randn(5,2)}
+    interv_dict = {"h1": [torch.randn(5)] * 3,
+                   "node": torch.zeros(5, 3),
+                   "h2": [torch.randn(5), torch.randn(5, 2)]}
+    loc_dict = {"h1": [LOC[:,0], LOC[:,2], LOC[:,1]],
+                "node": LOC[:,1:4], "h2": [LOC[:,1], LOC[:,3:5]]}
+
+    i = setup_multi_loc_batched_intervention(input_dict, interv_dict, loc_dict, batched=True, batch_dim=0)
+
+    assert len(i.intervention["h1"]) == 3
+
+    eq_pairs = [(i.intervention["h1"][j], interv_dict["h1"][j]) for j in range(3)]
+    eq_pairs += [(i.intervention["h2"][j], interv_dict["h2"][j]) for j in range(2)]
+    eq_pairs += [(i.intervention["node"], interv_dict["node"])]
+
+    for x, y in eq_pairs:
+        assert torch.allclose(x,y)
+
+    assert i.location["h1"] == [LOC[:,0], LOC[:,2], LOC[:,1]]
+    assert i.location["h2"] == [LOC[:,1], LOC[:,3:5]]
+    assert i.location["node"] == LOC[:,1:4]
+
+
+
+
+# def test_multi_node_multi_interv_dict_gi_dict():
+#     input_dict = {"leaf1": torch.randn(5, 2)}
+#     interv_dict = {"h1": [torch.randn(5)] * 3,
+#                    "node": torch.zeros(5, 3),
+#                    "h2": [torch.randn(5), torch.randn(5, 2)]}
+#     loc_dict = {"h1": [LOC[:, 0], LOC[:, 2], LOC[:, 1]],
+#                 "node": LOC[:, 1:4], "h2": [LOC[:, 1], LOC[:, 3:5]]}
+#     interv = GraphInput(interv_dict, batched=True, batch_dim=0)
+#     i = Intervention(input_dict, interv, loc_dict, batched=True, batch_dim=0)
+#
+#     eq_pairs = [(i.intervention["h1"][j], interv_dict["h1"][j]) for j in range(3)]
+#     eq_pairs += [(i.intervention["h2"][j], interv_dict["h2"][j]) for j in range(2)]
+#     eq_pairs += [(i.intervention["node"], interv_dict["node"])]
+#
+#     for x, y in eq_pairs:
+#         assert torch.allclose(x, y)
+#
+#     assert i.location["h1"] == [LOC[:, 0], LOC[:, 2], LOC[:, 1]]
+#     assert i.location["h2"] == [LOC[:, 1], LOC[:, 3:5]]
+#     assert i.location["node"] == LOC[:, 1:4]

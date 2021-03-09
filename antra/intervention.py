@@ -72,15 +72,14 @@ class Intervention:
                 )
             self._base = base
 
-        multi_loc_nodes = self.multi_loc_nodes
         if location is not None:
             # specifying any value that is not None, including empty dict {}, will overwrite self._location
             new_location = {}
-            multi_loc_nodes = set()
+            self.multi_loc_nodes = set()
             for node_name, loc in location.items():
                 if isinstance(loc, list):
                     new_location[node_name] = [Location.process(l) for l in loc]
-                    multi_loc_nodes.add(node_name)
+                    self.multi_loc_nodes.add(node_name)
                 else:
                     new_location[node_name] = Location.process(loc)
             location = new_location
@@ -116,7 +115,7 @@ class Intervention:
                         prev_values = to_add[node_name] if isinstance(to_add[node_name], list) else [to_add[node_name]]
                         prev_values.append(value)
                         to_add[node_name] = prev_values
-                        multi_loc_nodes.add(node_name)
+                        self.multi_loc_nodes.add(node_name)
 
                     if node_name not in location:
                         location[node_name] = loc
@@ -125,7 +124,7 @@ class Intervention:
                         prev_locs = location[node_name] if isinstance(location[node_name], list) else [location[node_name]]
                         prev_locs.append(loc)
                         location[node_name] = prev_locs
-                        multi_loc_nodes.add(node_name)
+                        self.multi_loc_nodes.add(node_name)
 
 
             # remove indexing part in names
@@ -133,17 +132,15 @@ class Intervention:
                 intervention.pop(node_name)
             intervention.update(to_add)
 
-            if multi_loc_nodes:
-                self._validate_multi_loc(intervention, location, multi_loc_nodes)
+            if self.multi_loc_nodes:
+                self._validate_multi_loc(intervention, location, self.multi_loc_nodes)
 
-            interv_keys = self._get_interv_graphinput_keys(intervention, location, multi_loc_nodes)
+            interv_keys = self._get_interv_graphinput_keys(intervention, location, self.multi_loc_nodes)
 
             self._intervention = GraphInput(
                 intervention, batched=self.batched, batch_dim=self.batch_dim,
                 keys=interv_keys
             )
-
-        self.multi_loc_nodes = multi_loc_nodes
 
         self._location = location
 

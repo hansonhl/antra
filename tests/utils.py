@@ -16,13 +16,18 @@ params = [t for t in itertools.product(*interv_construction_types) if t not in i
 idfn = lambda t: "/".join(t)
 @pytest.fixture(params=params, ids=idfn)
 def setup_intervention(request):
+    return setup_intervention_func_for_fixture(request)
+
+
+
+def setup_intervention_func_for_fixture(request):
     base_method, interv_method, loc_method = request.param
 
-    def _setup_intervention(input_dict, interv_dict, loc_dict=None):
+    def _setup_intervention(input_dict, interv_dict, loc_dict=None, batched=False, batch_dim=0):
         if base_method == "dict":
             base_input = input_dict
         else:
-            base_input = GraphInput(input_dict)
+            base_input = GraphInput(input_dict, batched=batched, batch_dim=batch_dim)
 
         interv_dict = interv_dict.copy()
         if loc_dict and loc_method == "interv_str":
@@ -43,7 +48,7 @@ def setup_intervention(request):
         if interv_method == "dict":
             interv = interv_dict
         elif interv_method == "GraphInput":
-            interv = GraphInput(interv_dict)
+            interv = GraphInput(interv_dict, batched=batched, batch_dim=batch_dim)
         else:
             interv = None
 
@@ -52,14 +57,15 @@ def setup_intervention(request):
         else:
             locs = None
 
-        intervention = Intervention(base_input, interv, locs)
+        intervention = Intervention(base_input, interv, locs, batched=batched, batch_dim=batch_dim)
 
         if interv_method == "set":
             for interv_node_name, interv_value in interv_dict.items():
-                print(f"set_intervention({interv_node_name, interv_value})")
+                # print(f"set_intervention({interv_node_name, interv_value})")
                 intervention.set_intervention(interv_node_name, interv_value)
         if loc_dict and loc_method == "set":
             for interv_node_name, loc in loc_dict.items():
+                # print(f"set_loc({interv_node_name, loc})")
                 intervention.set_location(interv_node_name, loc)
 
         return intervention

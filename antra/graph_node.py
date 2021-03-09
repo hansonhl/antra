@@ -146,45 +146,53 @@ class GraphNode:
         if result is not None:
             return result
         else:
+            if len(self.children) == 0:
+                result = self.forward(inputs[self.name])
+            else:
+                # non-leaf node
+                children_res = []
+                for child in self.children:
+                    child_res = child.compute(inputs if intervention is None else intervention)
+                    children_res.append(child_res)
+                result = self.forward(*children_res)
+
             if intervention and self.name in intervention.intervention:
                 if self.name in intervention.location:
                     # intervene a specific location in a vector/tensor
                     # result = self.base_cache.get(inputs, None)
-                    if not self.cache_results:
-                        raise RuntimeError(f"Cannot intervene on node {self.name} "
-                                           f"because its results are not cached")
-                    result = self._get_from_cache(inputs, from_interv=False)
-                    if result is None:
-                        raise RuntimeError(
-                            f"Must compute result of node \"{self.name}\" without intervention once "
-                            "before intervening (base: %s, intervention: %s)"
-                            % (intervention.base, intervention.intervention))
+                    # if not self.cache_results:
+                    #     raise RuntimeError(f"Cannot intervene on node {self.name} "
+                    #                        f"because its results are not cached")
+                    # children_affected = any(c in intervention.affected_nodes for c in self.children_dict.keys())
+                    # print(f"{self.name} has affected children?", children_affected)
+                    # if children_affected:
+                    #     if not intervention.cache_results:
+                    #         raise RuntimeError(f"Cannot intervene on {self.name}, unable to retrieve cached values of its children"
+                    #                            f"because intervention.cache_results is False")
+                    #     result = self._get_from_cache(intervention, from_interv=True)
+                    # else:
+                    #     result = self._get_from_cache(inputs, from_interv=False)
+                    #
+                    # if result is None:
+                    #     raise RuntimeError(
+                    #         f"Must compute unintervened value of \"{self.name}\" once "
+                    #         "before intervening (base: %s, intervention: %s)"
+                    #         % (intervention.base, intervention.intervention))
                     result = copy_helper(result)
-                    idx = intervention.location[self.name]
-                    result[idx] = intervention.intervention[self.name]
+                    locations = intervention.location[self.name]
+                    interv_values = intervention.intervention[self.name]
+                    if isinstance(locations, list):
+                        for idx, value in zip(locations, interv_values):
+                            result[idx] = value
+                    else:
+                        result[locations] = interv_values
                 else:
                     # replace the whole tensor
                     result = intervention.intervention[self.name]
-                if len(self.children) != 0:
-                    for child in self.children:
-                        child_res = child.compute(
-                            inputs if intervention is None else intervention)
-            else:
-                if len(self.children) == 0:
-                    # leaf
-                    values = inputs[self.name]
-                    # if isinstance(values, list) or isinstance(values, tuple):
-                    #     result = self.forward(*values)
-                    # else:
-                    result = self.forward(values)
-                else:
-                    # non-leaf node
-                    children_res = []
-                    for child in self.children:
-                        child_res = child.compute(
-                            inputs if intervention is None else intervention)
-                        children_res.append(child_res)
-                    result = self.forward(*children_res)
+                # if len(self.children) != 0:
+                #     for child in self.children:
+                #         child_res = child.compute(
+                #             inputs if intervention is None else intervention)
 
             self._save_to_cache(intervention if is_affected else inputs,
                                 result, is_affected)
