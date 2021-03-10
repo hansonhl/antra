@@ -373,25 +373,47 @@ idx = LOC[:2]
 torch.all(a[idx] == a[:2]) # True 
 ```
 We can then use the `LOC` object to provide the indexing information for an intervention, by specifying a `LOC` object 
-for each node. There are two alternative ways to do this:
+for each node.
 ```python
-# two ways to specify an intervention
 intervention_dict = {"node1": torch.tensor([-10, -20])}
 location_dict = {"node1": LOC[:2]}
 interv = Intervention(base_graph_input, intervention_dict, location_dict) # base input as defined above
-# --- or ---
+```
+and as an alias,
+```python
 interv = Intervention(base_graph_input)
 interv.set_intervention("node1", torch.tensor([-10, -20]))
 interv.set_location("node1", LOC[:2])
+```
+
+### Intervening on multiple locations in a single node
+
+This is useful when you would like to intervene on discontinuous slices/indices of a tensor or array.
+Simply provide the locations and their respective values as a python list in the `intervention_dict` and 
+`location_dict`.
+
+**Note** in this case the `set_intervention` and `set_location` aliases do not work, and you cannot use a 
+`GraphInput` object in place of the `intervention_dict` argument.
+
+For example,
+```python
+intervention_dict = {"node1": [torch.tensor([-10]), torch.tensor([-20])]}
+location_dict = {"node1": [LOC[0], LOC[2]]}
+interv = Intervention(base_graph_input, intervention_dict, location_dict) # base input as defined above
+```
+is equivalent to the operation
+```
+node1 = x * y // original value of node 1
+node1[0] = torch.tensor([-10])
+node1[2] = torch.tensor([-20])
 ```
 
 ### Computing interventions with specified indexing location
 
 This is the same as described in the [section above](#computing-the-intervention).
 
+### How the LOC object works (just fyi)
 
-> **How all of this works under the hood**
-> 
 > The bracket notation `[]` on a python object is essentially a call to `__getitem__()`
 > (to retrieve values) or `__setitem__()` (for value assignments) builtin methods. Within the brackets,
 > comma `,` denote a `tuple`, and colons `:` are a shorthand for python `slice` objects. 
@@ -408,6 +430,7 @@ class Location:
     def __getitem__(self, item):
         return item
 ```
+
 
 ## Batched computation and intervention
 
@@ -444,6 +467,8 @@ future.
     base_input_values = torch.randn(batch_size, input_dim_size) # batched input value
     base_input_dict = {"input_leaf": base_input_values}
     base_graph_input = GraphInput(base_input_dict, batched=True, batch_dim=0)
+    # --- or ---
+    base_graph_input = GraphInput.batched(base_input_dict, batch_dim=0) # alias of the above
     ```
    
 4. **Prepare batched `Intervention` objects**. Also set `batched=True` and `batch_dim` in its constructor. Note that if
@@ -453,6 +478,8 @@ future.
     intervention_dict = {"matmul_batched[:,:2]": torch.zeros(batch_size, 2)}
     intervention = Intervention(base_graph_input, intervention_dict,
                                 batched=True, batch_dim=0)
+    # --- or ---
+    intervention = Intervention.batched(base_graph_input, intervention_dict, batch_dim=0)
     ```
     Note that the intervention location indexing in the brackets `[:,:2]` is compatible with both 1) `matmul_batched`'s
     output shape `(batch_size, hidden_dim)`, as well as the intervention value itself `torch.zeros(batch_size, 2)`. 
@@ -501,9 +528,37 @@ interv1 = Intervention(input_dict, intervention_dict, cache_results=False, cache
 _, _ = g.intervene(interv1)
 ```
 
-## Value caching and keys
+## Keys for batched non-array-like inputs
 
+To cache the outputs at each node in a `dict`, the `GraphInput` object will generate a key for each input value, using a 
+**serialization** procedure, which is getting a hashable key for input types that cannot be hashed by value,
+such as Python built-in lists, PyTorch tensors, and numpy arrays. It does this by converting everything into a hashable
+type, usually in the form of nested tuples. 
 
+If the input is batched into a tensor, with the inputs stacked along a given dimension,
+`antra` will automatically take it apart and get the serialized key for each input value.
+
+Nevertheless, if your input is batched but is not packaged into a single array or tensor, e.g. a dict, you need to 
+specify your own keys when constructing a `GraphInput` object. It must be a python list of the same length as the batch
+size. You can use `antra.utils.serialize` for your convenience.
+
+Here is an example:
+
+```python
+from antra import *
+from antra.utils import serialize
+# input_dict is a dict from strings to tensors
+# input_dict["input_ids"] is a tensor of shape (batch_size, sentence_length)
+# iterating over the tensor in a for loop will yield tensors of shape (sentence_length,)
+keys = [serialize(x) for x in input_dict["input_ids"]]
+base_input = GraphInput.batched(
+    values={"input": input_dict},
+    batch_dim=0,
+    keys=keys
+)
+intervention_dict = {"node": ...}
+intervention = Intervention.batched(base_input, intervention_dict)
+```
 
 ## Abstracted computation graphs
 
