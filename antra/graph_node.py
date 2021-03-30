@@ -195,7 +195,7 @@ class GraphNode:
                     #         f"Must compute unintervened value of \"{self.name}\" once "
                     #         "before intervening (base: %s, intervention: %s)"
                     #         % (intervention.base, intervention.intervention))
-                    result = copy_helper(result)
+                    # result = copy_helper(result)
                     locations = intervention.location[self.name]
                     interv_values = intervention.intervention[self.name]
                     if isinstance(locations, list):

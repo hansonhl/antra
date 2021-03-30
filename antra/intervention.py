@@ -144,11 +144,11 @@ class Intervention:
 
         self._location = location
 
-        if self.location and not self.cache_base_results or not self.base.cache_results:
-            logger.warning(f"To intervene on a indexed location, results of the base run must be cached, "
-                           f"but self.cache_base_results is set to false. Automatically converting it to True")
-            self.cache_base_results = True
-            self.base.cache_results = True
+        # if self.location and not self.cache_base_results or not self.base.cache_results:
+        #     logger.warning(f"To intervene on a indexed location, results of the base run must be cached, "
+        #                    f"but self.cache_base_results is set to false. Automatically converting it to True")
+        #     self.cache_base_results = True
+        #     self.base.cache_results = True
 
         for loc_name in self.location:
             if loc_name not in self.intervention:
