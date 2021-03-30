@@ -46,6 +46,16 @@ def generate_bert_compgraph(bert_model, final_node="pool"):
     :param bert_model:
     :return:
     """
+    #
+    # input_ids = GraphNode.default_leaf("input_ids")
+    # attention_mask = GraphNode.default_leaf("attention_mask")
+    # token_type_ids = GraphNode.default_leaf("token_type_ids")
+    # position_ids = GraphNode.default_leaf("position_ids")
+    # head_mask = GraphNode.default_leaf("head_mask")
+    # inputs_embeds = GraphNode.default_leaf("inputs_embeds")
+    # output_attentions = GraphNode.default_leaf("output_attentions")
+    # output_hidden_states = GraphNode.default_leaf("output_hidden_states")
+    #
 
     input_leaf = GraphNode.leaf("input")
 
@@ -128,7 +138,7 @@ def generate_bert_compgraph(bert_model, final_node="pool"):
     elif final_node == "pool":
         raise ValueError("Final node cannot be pool because the given BERT model does not have a final pool layer!")
 
-    elif final_node == "bert_layer_11":
+    elif final_node == "hidden":
         return hidden_layer
     else:
         raise ValueError(f"Invalid final node specification: {final_node}!")
@@ -144,8 +154,89 @@ class BertGraphInput(GraphInput):
             keys=keys
         )
 
-class BertCompGraph(ComputationGraph):
+class BertModelCompGraph(ComputationGraph):
     def __init__(self, bert_model, final_node="pool"):
         self.bert_model = bert_model
         root = generate_bert_compgraph(self.bert_model, final_node=final_node)
         super().__init__(root)
+
+
+class BertLMHeadModelCompGraph(ComputationGraph):
+    def __init__(self, model):
+        self.model = model
+        self.bert_model = model.bert
+        self.lm_head_module = model.cls
+
+        assert self.bert_model.pooler is None
+        bert_hidden = generate_bert_compgraph(self.bert_model, final_node="hidden")
+
+        @GraphNode(bert_hidden, cache_results=False)
+        def lm_head(h):
+            return self.lm_head_module(h)
+
+        super().__init__(lm_head)
+
+
+# same as above
+class BertForMaskedLMCompGraph(ComputationGraph):
+    def __init__(self, model):
+        self.model = model
+        self.bert_model = model.bert
+        self.lm_head_module = model.cls
+
+        assert self.bert_model.pooler is None
+        bert_hidden = generate_bert_compgraph(self.bert_model, final_node="hidden")
+
+        @GraphNode(bert_hidden, cache_results=False)
+        def lm_head(h):
+            return self.lm_head_module(h)
+
+        super().__init__(lm_head)
+
+
+class BertForNextSentecePredictionCompGraph(ComputationGraph):
+    def __init__(self, model):
+        self.model = model
+        self.bert_model = model.bert
+        self.cls = model.cls
+        assert self.bert_model.pooler is not None
+        pooler = generate_bert_compgraph(self.bert_model, final_node="pool")
+
+        @GraphNode(pooler)
+        def cls_head(h):
+            return self.cls(h)
+
+        super().__init__(cls_head)
+
+
+class BertForSequenceClassificationCompGraph(ComputationGraph):
+    def __init__(self, model):
+        self.model = model
+        self.bert_model = model.bert
+        self.dropout = model.dropout
+        self.cls = model.classifier
+
+        assert self.bert_model.pooler is not None
+        pooler = generate_bert_compgraph(self.bert_model, final_node="pool")
+
+        @GraphNode(pooler)
+        def cls_head(h):
+            return self.cls(self.dropout(h))
+
+        super().__init__(cls_head)
+
+class BertForTokenClassificationCompGraph(ComputationGraph):
+    def __init__(self, model):
+        self.model = model
+        self.bert_model = model.bert
+        self.dropout = model.dropout
+        self.cls = model.classifier
+
+        assert self.bert_model.pooler is None
+        bert_hidden = generate_bert_compgraph(self.bert_model, final_node="hidden")
+
+        @GraphNode(bert_hidden)
+        def cls_head(h):
+            return self.cls(self.dropout(h))
+
+        super().__init__(cls_head)

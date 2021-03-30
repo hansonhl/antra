@@ -4,7 +4,7 @@ from .intervention import Intervention
 from .graph_input import GraphInput
 from .utils import copy_helper
 
-from typing import Union, Callable, Dict
+from typing import Union, Callable, Dict, Any
 
 if importlib.util.find_spec("torch"):
     import antra.torch_utils as torch_utils
@@ -12,7 +12,8 @@ if importlib.util.find_spec("torch"):
 # TODO: add type hints
 
 class GraphNode:
-    def __init__(self, *args, name: str=None, forward: Callable=None, cache_results: bool=True):
+    def __init__(self, *args, name: str=None, forward: Callable=None,
+                 cache_results: bool=True, use_default: bool=False, default_value: Any=None):
         """Construct a computation graph node, can be used as function decorator
 
         This constructor is called first when `@GraphNode()` decorates a function.
@@ -46,6 +47,9 @@ class GraphNode:
         # Saving the results in their original devices by default
         self.cache_device = None
 
+        self.use_default = use_default
+        self.default_value = default_value
+
     def __call__(self, f):
         """Invoked immediately after `__init__` during `@GraphNode()` decoration
 
@@ -62,9 +66,15 @@ class GraphNode:
         return "GraphNode(\"%s\")" % self.name
 
     @classmethod
-    def leaf(cls, name: str):
+    def leaf(cls, name: str, use_default: bool=False, default_value: Any=None):
         """Construct a leaf node with a given name."""
-        return cls(name=name, forward=lambda x: x, cache_results=False)
+        return cls(name=name, forward=lambda x: x, cache_results=False,
+                   use_default=use_default, default_value=default_value)
+
+    @classmethod
+    def default_leaf(cls, name: str, default_value: Any=None):
+        return cls(name=name, forward=lambda x: x, cache_results=False,
+                   use_default=True, default_value=default_value)
 
     @property
     def children(self):
@@ -147,7 +157,14 @@ class GraphNode:
             return result
         else:
             if len(self.children) == 0:
-                result = self.forward(inputs[self.name])
+                # leaf node
+                if self.name in inputs:
+                    result = self.forward(inputs[self.name])
+                else:
+                    if self.use_default:
+                        return self.default_value
+                    else:
+                        raise RuntimeError(f"Input value not given for leaf node {self.name}!")
             else:
                 # non-leaf node
                 children_res = []

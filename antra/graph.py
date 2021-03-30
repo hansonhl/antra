@@ -93,24 +93,12 @@ class ComputationGraph:
         add_node(self.root)
         return leaves
 
-    def _prepare_inputs(self, inputs: GraphInput):
-        """
-        Prepare inputs
-        :raise: `RuntimeError` if something goes wrong
-        """
-        for node in self.leaves:
-            if node.name not in inputs:
-                raise RuntimeError(
-                    "input value not provided for leaf node %s" % node.name)
-
     def _validate_interv(self, intervention: Intervention):
         """
         Validates an experiment relevant to this `ComputationGraph`
         :param intervention:  intervention experiment in question
         :raise: `RuntimeError` if something goes wrong
         """
-        self._prepare_inputs(intervention.base)
-
         if not intervention.intervention:
             raise RuntimeError("Must specify some kind of intervention!")
 
@@ -127,7 +115,6 @@ class ComputationGraph:
         :param inputs:
         :return:
         """
-        self._prepare_inputs(inputs)
         return self.root.compute(inputs)
 
     def _iterative_compute(self, inputs: GraphInput):
