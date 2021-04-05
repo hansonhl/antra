@@ -8,6 +8,10 @@ from .location import Location
 from typing import *
 from collections import deque
 
+import logging
+
+logging.getLogger(__name__)
+
 class ComputationGraph:
     def __init__(self, root: GraphNode):
         """
@@ -165,7 +169,12 @@ class ComputationGraph:
         :param x: GraphInput object
         :return: output from node
         """
-        return self.nodes[node_name].compute(x)
+	try:
+	    return self.nodes[node_name].compute(x)
+	except KeyError as e:
+	    logging.error(f'Invalid key {node_name}. Valid keys are {self.nodes.keys()}')
+	    raise e
+
 
     def intervene_node(self, node_name: str, x: Intervention):
         """ Compute the value of a node during an intervention
