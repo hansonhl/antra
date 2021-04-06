@@ -2,8 +2,8 @@
 # It is duplicated here to support old pickled experiment result files.
 
 import torch
-
 import antra
+import copy
 from antra.utils import serialize
 from antra.interchange.mapping import create_possible_mappings
 
@@ -33,9 +33,35 @@ class InterchangeDataset(IterableDataset):
         self.curr_realizations = self.new_relizations
         self.new_realizations = dict()
 
+
+    def get_low_interventions(self, high_intervention):
+        partial_interventions = [dict()]
+        for high_variable in high_intervention:
+            new_partial_interventions = [dict()]
+            for partial_intervention in partial_interventions:
+                for realization in self.realizations[(high_variable, high_intervention[high_variable])]:
+                    partial_intervention_copy = copy.copy(partial_intervention)
+                    partial_intervention_copy[self.mapping(high_variable)] = realization
+                    new_partial_interventions.append(partial_intervention_copy)
+                for realization in self.curr_realizations[(high_variable, high_intervention[high_variable])]:
+                    partial_intervention_copy = copy.copy(partial_intervention)
+                    partial_intervention_copy[self.mapping(high_variable)] = realization
+                    partial_intervention_copy["accepted"] = True
+                    new_partial_interventions.append(partial_intervention_copy)
+        low_interventions = []
+        for map in partial_interventions:
+            if "accept" not in map.keys():
+                continue
+            else:
+                del map["accept"]
+                low_interventions.append(create_low_level_intervention(map))
+        return low_interventions 
+
+
+
     def __iter__(self):
         for high_intervention in self.high_interventions:
-            low_interventions = self.get_low_interventions()
+            low_interventions = self.get_low_interventions(high_intervention)
             for low_intervention in low_interventions:
                 yield {"low_intervention":low_intervention, "high_intervention": high_intervention, "high_output":,"low_output":}
 
