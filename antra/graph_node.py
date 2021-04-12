@@ -1,5 +1,6 @@
 import importlib
 
+import antra
 from .intervention import Intervention
 from .graph_input import GraphInput
 from .utils import copy_helper
@@ -10,6 +11,9 @@ if importlib.util.find_spec("torch"):
     import antra.torch_utils as torch_utils
 
 # TODO: add type hints
+
+NodeName = str
+
 
 class GraphNode:
     def __init__(self, *args, name: str=None, forward: Callable=None,
@@ -216,17 +220,30 @@ class GraphNode:
 
             return result
 
-    def clear_caches(self):
-        """Clear all caches"""
-        if hasattr(self, "base_cache"):
-            del self.base_cache
-            self.base_cache = {}
-        if hasattr(self, "interv_cache"):
-            del self.interv_cache
-            self.interv_cache = {}
-        if hasattr(self, "base_output_devices"):
-            del self.base_output_devices
-            self.base_output_devices = {}
-        if hasattr(self, "interv_output_devices"):
-            del self.interv_output_devices
-            self.interv_output_devices = {}
+    def clear_caches(self, inputs: Union[GraphInput, Intervention, None]=None):
+        """Clear all caches or the cache records of a specific input"""
+        if inputs is not None:
+            for cache_name in ["base_cache", "interv_cache", "base_output_devices", "interv_output_devices"]:
+                if not hasattr(self, cache_name):
+                    continue
+                cache = getattr(self, cache_name)
+                if inputs.batched:
+                    for key in inputs.keys:
+                        if key in cache:
+                            del cache[key]
+                else:
+                    if inputs.keys in cache:
+                        del cache[inputs.keys]
+        else:
+            if hasattr(self, "base_cache"):
+                del self.base_cache
+                self.base_cache = {}
+            if hasattr(self, "interv_cache"):
+                del self.interv_cache
+                self.interv_cache = {}
+            if hasattr(self, "base_output_devices"):
+                del self.base_output_devices
+                self.base_output_devices = {}
+            if hasattr(self, "interv_output_devices"):
+                del self.interv_output_devices
+                self.interv_output_devices = {}
