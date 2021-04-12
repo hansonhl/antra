@@ -1,6 +1,6 @@
 import re
 
-from .location import Location
+from .location import Location, location_to_str
 from .graph_input import GraphInput
 from .utils import serialize, serialize_batch
 
@@ -172,11 +172,11 @@ class Intervention:
             if node_name not in multi_loc_nodes:
                 k = node_name
                 if node_name in location:
-                    k += Location.loc_to_str(location[node_name], add_brackets=True)
+                    k += location_to_str(location[node_name], add_brackets=True)
                 dict_for_keys[k] = intervention[node_name]
             else:
                 for loc, value in zip(location[node_name], intervention[node_name]):
-                    k = node_name + Location.loc_to_str(loc, add_brackets=True)
+                    k = node_name + location_to_str(loc, add_brackets=True)
                     dict_for_keys[k] = value
         if self.batched:
             return serialize_batch(dict_for_keys, dim=self.batch_dim)

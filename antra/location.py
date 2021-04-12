@@ -1,3 +1,8 @@
+from typing import Union, Tuple
+
+LocationType = Union[int, slice, Ellipsis, Tuple["LocationType", ...]]
+SerializedLocationType = Union[int, str, Tuple["SerializedLocationType", ...]]
+
 class Location:
     """A helper class to manage parsing of indices and slices"""
 
@@ -29,29 +34,48 @@ class Location:
         return Ellipsis if s == "..." \
             else True if s == "True" \
             else False if s == "False" \
-            else Location.str_to_slice(s) if ":" in s \
+            else str_to_slice(s) if ":" in s \
             else int(s)
 
-    @staticmethod
-    def str_to_slice(s):
-        return slice(*map(lambda x: int(x.strip()) if x.strip() else None, s.split(':')))
+def str_to_slice(s: str) -> slice:
+    return slice(*map(lambda x: int(x.strip()) if x.strip() else None, s.split(':')))
 
-    @staticmethod
-    def slice_to_str(s):
-        return ':'.join(x if x != "None" else "" for x in str(s).strip("slice").strip("()").split(", "))
+def slice_to_str(s: slice) -> str:
+    return ':'.join(x if x != "None" else "" for x in str(s).strip("slice").strip("()").split(", "))
 
-    @staticmethod
-    def loc_to_str(l, add_brackets=False):
-        if isinstance(l, tuple):
-            s = ",".join(Location.slice_to_str(s) for s in l)
-        elif isinstance(l, slice):
-            s = Location.slice_to_str(l)
-        elif isinstance(l, int):
-            s = str(l)
-        else:
-            raise ValueError(f"Invalid input type {type(l)}. Must be int, tuple or slice")
+def location_to_str(l: LocationType, add_brackets=False) -> str:
+    if isinstance(l, int):
+        s = str(l)
+    elif isinstance(l, slice):
+        s = slice_to_str(l)
+    elif l is Ellipsis:
+        s = "..."
+    elif isinstance(l, tuple):
+        s = ",".join(location_to_str(s) for s in l)
+    else:
+        raise ValueError(f"Invalid input type {type(l)}. Must be int, tuple or slice")
 
-        if add_brackets: s = f"[{s}]"
+    if add_brackets: s = "[" + s + "]"
+    return s
+
+def serialize_location(l: LocationType) -> SerializedLocationType:
+    if isinstance(l, int):
+        return l
+    elif isinstance(l, slice):
+        return slice_to_str(l)
+    elif l is Ellipsis:
+        return "..."
+    else:
+        return tuple(serialize_location(x) for x in l)
+
+
+def deserialize_location(s: SerializedLocationType) -> LocationType:
+    if isinstance(s, int):
         return s
+    elif isinstance(s, str):
+        if s == "...": return  Ellipsis
+        else: return str_to_slice(s)
+    if isinstance(s, tuple):
+        return tuple(deserialize_location(s))
 
 

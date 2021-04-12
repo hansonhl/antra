@@ -4,6 +4,9 @@ import copy
 from .location import Location
 from typing import *
 
+# type aliases
+SerializableType = Union[bool, int, float, str, frozenset, bytes, complex, Tuple["SerializableType", ...]]
+
 def is_torch_tensor(x):
     if 'torch' in sys.modules:
         return isinstance(x, sys.modules['torch'].Tensor)
@@ -80,16 +83,16 @@ def serialize_batch(d: Dict[str, Any], dim: int) -> List[Tuple]:
     return [tuple(sorted((k, serialize(a)) for k, a in zip(d.keys(), x)))
             for x in zip(*split_values)]
 
-def stringify_mapping(m):
-    res = {}
-    for high, low in m.items():
-        low_dict = {}
-        for low_node, low_loc in low.items():
-            if isinstance(low_loc, slice):
-                str_low_loc = Location.slice_to_str(low_loc)
-            else:
-                str_low_loc = str(low_loc)
-            low_dict[low_node] = str_low_loc
-        res[high] = low_dict
-    return res
+# def stringify_mapping(m):
+#     res = {}
+#     for high, low in m.items():
+#         low_dict = {}
+#         for low_node, low_loc in low.items():
+#             if isinstance(low_loc, slice):
+#                 str_low_loc = Location.slice_to_str(low_loc)
+#             else:
+#                 str_low_loc = str(low_loc)
+#             low_dict[low_node] = str_low_loc
+#         res[high] = low_dict
+#     return res
 
