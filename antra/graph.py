@@ -20,56 +20,6 @@ class ComputationGraph:
         self.nodes = {}
         self.leaves = self._validate_graph()
 
-    def get_nodes_and_dependencies(self):
-        nodes = [node_name for node_name in self.nodes]
-        dependencies = {self.root.name: set()}
-        def fill_dependencies(node):
-            for child in node.children:
-                if child in dependencies:
-                    dependencies[child.name].add(node.name)
-                else:
-                    dependencies[child.name] = {node.name}
-                fill_dependencies(child)
-        fill_dependencies(self.root)
-        return nodes, dependencies
-
-    def get_indices(self,node):
-        length = None
-        for key in self.nodes[node].base_cache:
-            length = max(self.nodes[node].base_cache[key].shape)
-        indices = []
-        for i in range(length):
-            for subset in itertools.combinations({x for x in range(0, length)},i+1):
-                subset = list(subset)
-                subset.sort()
-                indices.append(Location()[subset])
-        return indices
-
-    def get_locations(self, root_locations, unwanted_low_nodes=None):
-        root_nodes = []
-        for location in root_locations:
-            for node_name in location:
-                root_nodes.append(self.nodes[node_name])
-        viable_nodes = None
-        for root_node in root_nodes:
-            current_nodes = set()
-            def descendants(node):
-                for child in node.children:
-                    current_nodes.add(child.name)
-                    descendants(child)
-            descendants(root_node)
-            if viable_nodes is None:
-                viable_nodes = current_nodes
-            else:
-                viable_nodes = viable_nodes.intersection(current_nodes)
-        result = []
-        for viable_node in viable_nodes:
-            if unwanted_low_nodes and viable_node in unwanted_low_nodes:
-                continue
-            for index in self.get_indices(viable_node):
-                result.append({viable_node:index})
-        return result
-
     def _validate_graph(self):
         """Validate the structure of the computational graph
 
@@ -99,8 +49,8 @@ class ComputationGraph:
         :param intervention:  intervention experiment in question
         :raise: `RuntimeError` if something goes wrong
         """
-        if not intervention.intervention:
-            raise RuntimeError("Must specify some kind of intervention!")
+        # if not intervention.intervention:
+        #     raise RuntimeError("Must specify some kind of intervention!")
 
         for name in intervention.intervention.values.keys():
             if name not in self.nodes:

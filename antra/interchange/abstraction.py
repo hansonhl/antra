@@ -10,7 +10,7 @@ from antra.torch_utils import deserialize
 
 
 def get_value(high_model, high_node, high_intervention):
-    return high_model.compute_node(high_node, high_intervention)
+    return high_model.intervene_node(high_node, high_intervention)[1]
 
 def create_new_realizations(low_model, high_model, high_node, mapping, low_intervention, high_intervention):
     """H: Return a direct mapping between each high intermediate node value and low intermediate node value,
@@ -21,7 +21,7 @@ def create_new_realizations(low_model, high_model, high_node, mapping, low_inter
         high_value = get_value(high_model, high_node, high_intervention)
         low_value = None
         for low_node in mapping[high_node]:
-            low_value = low_model.compute_node(low_node, low_intervention)[mapping[high_node][low_node]] # index into location
+            low_value = low_model.intervene_node(low_node, low_intervention)[1][mapping[high_node][low_node]] # index into location
         for child in high_model.nodes[high_node].children:
             fill_new_realizations(child.name, mapping, low_intervention, high_intervention)
         if high_node in high_intervention.intervention.values or high_model.nodes[high_node] in high_model.leaves or high_node == high_model.root.name:
@@ -116,7 +116,7 @@ def test_mapping(low_model,high_model,high_inputs,total_high_interventions,mappi
         # store whether the output matches
         high_output = get_value(high_model, high_model.root.name, curr_high_intervention)
         for low_node in mapping[high_model.root.name]:
-            low_output = low_model.compute_node(low_node, curr_low_intervention)
+            _, low_output = low_model.intervene_node(low_node, curr_low_intervention)
         result[(curr_low_intervention, curr_high_intervention)] = low_output == high_output
         # update the realizations H: for this low, high intervention pair
         new_realizations, new_realizations_to_inputs = create_new_realizations(low_model, high_model,high_model.root.name, mapping, curr_low_intervention, curr_high_intervention)
@@ -187,8 +187,9 @@ def find_abstractions(low_model, high_model, high_inputs, total_high_interventio
     print("creating possible mappings")
     mappings = create_possible_mappings(low_model, high_model, fixed_assignments, unwanted_low_nodes=unwanted_low_nodes)
     #print(len(mappings))
-    #for mapping in mappings:
-    #    print(mapping)
+    for mapping in mappings:
+       print(mapping)
+    return None
     print("testing mappings")
     for mapping in mappings:
     #    print(len(test_mapping(low_model, high_model, high_inputs,total_high_interventions, mapping, input_mapping).keys()))
