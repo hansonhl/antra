@@ -1,8 +1,70 @@
 import copy
+import itertools
+from antra import *
 
 
-def create_possible_mappings(low_model, high_model, fixed_assignments=dict(),
-                             unwanted_low_nodes=None):
+from typing import *
+
+NodeName = str
+AbstractionMappingType = Dict[NodeName, Dict[NodeName, LocationType]]
+
+def get_nodes_and_dependencies(graph: ComputationGraph):
+        nodes = [node_name for node_name in graph.nodes]
+        dependencies = {graph.root.name: set()}
+        def fill_dependencies(node):
+            for child in node.children:
+                if child in dependencies:
+                    dependencies[child.name].add(node.name)
+                else:
+                    dependencies[child.name] = {node.name}
+                fill_dependencies(child)
+        fill_dependencies(graph.root)
+        return nodes, dependencies
+
+def get_indices(graph: ComputationGraph, node: NodeName):
+    length = None
+    for key in graph.nodes[node].base_cache:
+        length = max(graph.nodes[node].base_cache[key].shape)
+    indices = []
+    for i in range(length):
+        for subset in itertools.combinations({x for x in range(0, length)},i+1):
+            subset = list(subset)
+            subset.sort()
+            indices.append(Location()[subset])
+    return indices
+
+def get_locations(graph: ComputationGraph, root_locations: Sequence[NodeName],
+                  unwanted_low_nodes: Optional[List[NodeName]]=None):
+    root_nodes = []
+    for location in root_locations:
+        for node_name in location:
+            root_nodes.append(graph.nodes[node_name])
+    viable_nodes = None
+    for root_node in root_nodes:
+        current_nodes = set()
+        def descendants(node):
+            for child in node.children:
+                current_nodes.add(child.name)
+                descendants(child)
+        descendants(root_node)
+        if viable_nodes is None:
+            viable_nodes = current_nodes
+        else:
+            viable_nodes = viable_nodes.intersection(current_nodes)
+    result = []
+    for viable_node in viable_nodes:
+        if unwanted_low_nodes and viable_node in unwanted_low_nodes:
+            continue
+        for index in get_indices(graph, viable_node):
+            result.append({viable_node:index})
+    return result
+
+def create_possible_mappings(
+        low_model: ComputationGraph,
+        high_model: ComputationGraph,
+        fixed_assignments: AbstractionMappingType,
+        unwanted_low_nodes: Optional[List[NodeName]]=None) \
+        -> List[AbstractionMappingType]:
     """
     :param low_model:
     :param high_model:
@@ -39,7 +101,8 @@ def create_possible_mappings(low_model, high_model, fixed_assignments=dict(),
             high_node = self.high_nodes[0]
             dependent_high_nodes = self.dependencies[high_node]
             #cycle through the potential locations in the low-level model we can map the high-level node to
-            for location in low_model.get_locations([self.partial_mapping[x] for x in dependent_high_nodes], unwanted_low_nodes):
+            locations = get_locations(low_model, [self.partial_mapping[x] for x in dependent_high_nodes], unwanted_low_nodes)
+            for location in locations:
                     if self.compatible_location(location):
                         self.assignment_list.append((high_node, location))
 
@@ -74,7 +137,7 @@ def create_possible_mappings(low_model, high_model, fixed_assignments=dict(),
         return new_certificate
 
     def root():
-        high_nodes, dependencies = high_model.get_nodes_and_dependencies()
+        high_nodes, dependencies = get_nodes_and_dependencies(high_model)
         certificate = MappingCertificate(dict(), high_nodes, dependencies)
         certificate.set_assignment_list()
         return certificate
