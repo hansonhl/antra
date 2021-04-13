@@ -34,12 +34,13 @@ def bert_masked_seq_classification_model():
     print("loading model...")
     return transformers.BertForSequenceClassification.from_pretrained("bert-base-uncased")
 
-def test_bert_compgraph(sentiment_data, bert_model):
+def test_bert_forward(sentiment_data, bert_model):
     model = bert_model
 
     device = torch.device("cuda")
     model = model.to(device)
     g = BertModelCompGraph(model)
+    # print("leaves", g.leaves)
 
     dataloader = DataLoader(sentiment_data.dev, batch_size=16, shuffle=False)
     with torch.no_grad():
@@ -54,9 +55,11 @@ def test_bert_compgraph(sentiment_data, bert_model):
                 return_dict=True
             )
             pooler_output = outputs.pooler_output
+            # print("batch from dataloader", batch)
             gi = BertGraphInput(batch)
             res = g.compute(gi)
             assert torch.allclose(res, pooler_output)
+
 
 def test_bert_intervention(sentiment_data, bert_model):
     model = bert_model
