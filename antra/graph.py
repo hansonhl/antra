@@ -5,7 +5,7 @@ from .graph_node import GraphNode
 from .graph_input import GraphInput
 from .location import Location
 
-from typing import Dict, Any, Union
+from typing import *
 from collections import deque
 
 class ComputationGraph:
@@ -16,16 +16,16 @@ class ComputationGraph:
         :param output_device: (For models that run on pytorch) transfer final
             root output to a given device
         """
-        self.root = root
-        self.nodes = {}
-        self.leaves = self._validate_graph()
+        self.root: GraphNode = root
+        self.nodes: Dict[str, GraphNode] = {}
+        self.leaves: Set[GraphNode] = self._validate_graph()
 
     def _validate_graph(self):
-        """Validate the structure of the computational graph
+        """ Validate the structure of the computational graph
 
         :raise: `RuntimeError` if something goes wrong
+        :return: set of leaf nodes
         """
-
         # TODO: check for cycles
         leaves = set()
         def add_node(node):
@@ -59,13 +59,35 @@ class ComputationGraph:
             # TODO: compare compatibility between shape of value and node
 
     def compute(self, inputs: GraphInput):
-        """
-        Run forward pass through graph with a given set of inputs
+        """ Run forward pass through graph with a given set of inputs
 
         :param inputs:
         :return:
         """
         return self.root.compute(inputs)
+
+    def compute_all_nodes(self, inputs: GraphInput) -> Dict[str, Any]:
+        """ Get the output for each node in the graph. This will temporarily
+        force the graph to cache the results of the inputs.
+
+        :param inputs:
+        :return:
+        """
+        no_caching = not inputs.cache_results
+        if no_caching:
+            inputs.cache_results = True
+
+        res_dict = {self.root.name: self.root.compute(inputs)}
+
+        for node_name, node in self.nodes.items():
+            if node_name != self.root.name:
+                res_dict[node_name] = node.compute(inputs)
+
+        if no_caching:
+            self.clear_caches(inputs)
+            inputs.cache_results = False
+
+        return res_dict
 
     def _iterative_compute(self, inputs: GraphInput):
         """
@@ -94,16 +116,44 @@ class ComputationGraph:
 
         return base_res, interv_res
 
-    def clear_caches(self):
-        """ Clear all caches.
-        :return: None
-        """
-        def clear_cache(node):
-            node.clear_caches()
-            for c in node.children:
-                clear_cache(c)
+    def intervene_all_nodes(self, intervention: Intervention):
+        """ Get the output for every node after an intervention in the graph.
 
-        clear_cache(self.root)
+        This will temporarily force the graph to cache the results of the inputs.
+
+        :param inputs:
+        :return:
+        """
+        base_res = self.compute_all_nodes(intervention.base)
+
+        self._validate_interv(intervention)
+        intervention.find_affected_nodes(self)
+
+        no_caching = not intervention.cache_results
+        if no_caching:
+            intervention.cache_results = True
+
+        res_dict = {self.root.name: self.root.compute(intervention)}
+
+        for node_name, node in self.nodes.items():
+            if node_name != self.root.name:
+                res_dict[node_name] = node.compute(intervention)
+
+        if no_caching:
+            self.clear_caches(intervention)
+            intervention.cache_results = False
+
+        return res_dict
+
+    def clear_caches(self, inputs: Union[GraphInput, Intervention, None]=None):
+        """ Clear all caches, or clear a specified cache entry for a given input.
+
+        :param inputs:
+        :return:
+        """
+        for node in self.nodes.values():
+            if node.cache_results:
+                node.clear_caches(inputs)
 
     def compute_node(self, node_name: str, x: GraphInput):
         """ Compute the value of a node in the graph without any interventions

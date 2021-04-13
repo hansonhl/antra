@@ -17,7 +17,8 @@ NodeName = str
 
 class GraphNode:
     def __init__(self, *args, name: str=None, forward: Callable=None,
-                 cache_results: bool=True, use_default: bool=False, default_value: Any=None):
+                 cache_results: bool=True, use_default: bool=False,
+                 default_value: Any=None):
         """Construct a computation graph node, can be used as function decorator
 
         This constructor is called first when `@GraphNode()` decorates a function.
@@ -30,6 +31,11 @@ class GraphNode:
         :param forward: the name of the forward function
         :param cache_results: whether this node caches results. Cannot perform
             interventions
+        :param use_default: *Only applies to leaf nodes* whether to return a
+            default value if not given in the GraphInput object.
+        :param default_value: If use_default is set to True, then return this
+            value by default. The same value will be used for both singleton
+            or batched inputs.
         """
         self.children = args
         self.cache_results = cache_results

@@ -56,11 +56,22 @@ def generate_bert_compgraph(bert_model, final_node="pool"):
     # output_attentions = GraphNode.default_leaf("output_attentions")
     # output_hidden_states = GraphNode.default_leaf("output_hidden_states")
     #
+    kwarg_names = ["input_ids", "attention_mask", "token_type_ids",
+                    "position_ids", "head_mask", "inputs_embeds",
+                    "output_attentions", "output_hidden_states",
+                    "return_dict", "encoder_hidden_states",
+                    "encoder_attention_mask"]
+    input_leaves = [GraphNode.leaf(name=name, use_default=True, default_value=None) for name in kwarg_names]
+    # input_leaf = GraphNode.leaf("input")
 
-    input_leaf = GraphNode.leaf("input")
-
-    @GraphNode(input_leaf, cache_results=False)
-    def input_preparation(input_dict):
+    @GraphNode(*input_leaves, cache_results=False)
+    def input_preparation(
+            input_ids, attention_mask, token_type_ids,
+            position_ids, head_mask, inputs_embeds,
+            output_attentions, output_hidden_states,
+            return_dict, encoder_hidden_states,
+            encoder_attention_mask
+        ):
         """
         Prepare inputs for Bert.
 
@@ -71,14 +82,19 @@ def generate_bert_compgraph(bert_model, final_node="pool"):
         :param input_dict: input into BertModel.forward() in the form of a dict.
         :return: input_dict with administrative stuff filled in
         """
-        input_dict = {k: v for k, v in input_dict.items()}
-
-        for key in ["input_ids", "attention_mask", "token_type_ids",
-                    "position_ids", "head_mask", "inputs_embeds",
-                    "output_attentions", "output_hidden_states",
-                    "return_dict", "encoder_hidden_states",
-                    "encoder_attention_mask"]:
-            if key not in input_dict: input_dict[key] = None
+        input_dict = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "token_type_ids": token_type_ids,
+            "position_ids": position_ids,
+            "head_mask": head_mask,
+            "inputs_embeds": inputs_embeds,
+            "output_attentions": output_attentions,
+            "output_hidden_states": output_hidden_states,
+            "return_dict": return_dict,
+            "encoder_hidden_states": encoder_hidden_states,
+            "encoder_attention_mask": encoder_attention_mask
+        }
 
         for key in ["output_attentions", "output_hidden_states", "return_dict"]:
             if input_dict[key]:
@@ -145,13 +161,12 @@ def generate_bert_compgraph(bert_model, final_node="pool"):
 
 class BertGraphInput(GraphInput):
     def __init__(self, input_dict, cache_results=True):
-        keys = [serialize(x) for x in input_dict["input_ids"]]
         super().__init__(
-            values={"input": input_dict},
-            cache_results=cache_results,
+            values=input_dict,
             batched=True,
             batch_dim=0,
-            keys=keys
+            key_leaves=["input_ids"],
+            cache_results=cache_results
         )
 
 class BertModelCompGraph(ComputationGraph):

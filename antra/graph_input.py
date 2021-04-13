@@ -33,12 +33,12 @@ class GraphInput:
 
         if batched and not keys:
             keys = serialize_batch(
-                {k: v for k, v in values if k in key_leaves} if key_leaves else values,
+                {k: v for k, v in values.items() if k in key_leaves} if key_leaves else values,
                 dim=batch_dim
             )
         if not batched and not keys:
             keys = serialize(
-                {k: v for k, v in values if k in key_leaves} if key_leaves else values
+                {k: v for k, v in values.items() if k in key_leaves} if key_leaves else values
             )
 
         self.keys = keys
