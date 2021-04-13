@@ -1,6 +1,6 @@
 from typing import Union, Tuple
 
-LocationType = Union[int, slice, Ellipsis, Tuple["LocationType", ...]]
+LocationType = Union[int, slice, type(...), Tuple["LocationType", ...]]
 SerializedLocationType = Union[int, str, Tuple["SerializedLocationType", ...]]
 
 class Location:

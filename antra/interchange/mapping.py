@@ -21,20 +21,27 @@ def get_nodes_and_dependencies(graph: ComputationGraph):
         fill_dependencies(graph.root)
         return nodes, dependencies
 
-def get_indices(graph: ComputationGraph, node: NodeName):
-    length = None
-    for key in graph.nodes[node].base_cache:
-        length = max(graph.nodes[node].base_cache[key].shape)
-    indices = []
-    for i in range(length):
-        for subset in itertools.combinations({x for x in range(0, length)},i+1):
-            subset = list(subset)
-            subset.sort()
-            indices.append(Location()[subset])
+def get_indices(graph: ComputationGraph, node: NodeName, nodes_to_indices: Dict[NodeName, List[LocationType]]):
+    if nodes_to_indices:
+        indices = nodes_to_indices[node]
+    else:
+        indices = [LOC[:]]
+        # length = None
+        # for key in graph.nodes[node].base_cache:
+        #     length = max(graph.nodes[node].base_cache[key].shape)
+        # indices = []
+        # for i in range(length):
+        #     for subset in itertools.combinations({x for x in range(0, length)},i+1):
+        #         subset = list(subset)
+        #         subset.sort()
+        #         indices.append(Location()[subset])
     return indices
 
-def get_locations(graph: ComputationGraph, root_locations: Sequence[NodeName],
-                  unwanted_low_nodes: Optional[List[NodeName]]=None):
+def get_locations(
+        graph: ComputationGraph,
+        root_locations: Sequence[NodeName],
+        unwanted_low_nodes: Optional[List[NodeName]]=None,
+        nodes_to_indices: Optional[Dict[NodeName, List[LocationType]]]=None):
     root_nodes = []
     for location in root_locations:
         for node_name in location:
@@ -55,7 +62,7 @@ def get_locations(graph: ComputationGraph, root_locations: Sequence[NodeName],
     for viable_node in viable_nodes:
         if unwanted_low_nodes and viable_node in unwanted_low_nodes:
             continue
-        for index in get_indices(graph, viable_node):
+        for index in get_indices(graph, viable_node, nodes_to_indices):
             result.append({viable_node:index})
     return result
 
@@ -63,7 +70,8 @@ def create_possible_mappings(
         low_model: ComputationGraph,
         high_model: ComputationGraph,
         fixed_assignments: AbstractionMappingType,
-        unwanted_low_nodes: Optional[List[NodeName]]=None) \
+        unwanted_low_nodes: Optional[List[NodeName]]=None,
+        nodes_to_indices: Optional[Dict[NodeName, List[LocationType]]]=None) \
         -> List[AbstractionMappingType]:
     """
     :param low_model:
@@ -101,10 +109,14 @@ def create_possible_mappings(
             high_node = self.high_nodes[0]
             dependent_high_nodes = self.dependencies[high_node]
             #cycle through the potential locations in the low-level model we can map the high-level node to
-            locations = get_locations(low_model, [self.partial_mapping[x] for x in dependent_high_nodes], unwanted_low_nodes)
+            locations = get_locations(
+                low_model,
+                [self.partial_mapping[x] for x in dependent_high_nodes],
+                unwanted_low_nodes,
+                nodes_to_indices)
             for location in locations:
-                    if self.compatible_location(location):
-                        self.assignment_list.append((high_node, location))
+                if self.compatible_location(location):
+                    self.assignment_list.append((high_node, location))
 
         def add_assignment(self):
             #add a new assignment to the partially constructed mapping

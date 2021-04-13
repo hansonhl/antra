@@ -1,5 +1,5 @@
 from antra import ComputationGraph, GraphNode, Intervention, Location
-from antra.interchange import find_abstractions
+from antra.interchange.abstraction import find_abstractions
 import numpy as np
 
 class BooleanLogicProgram(ComputationGraph):
@@ -86,11 +86,13 @@ def test_abstraction_simple():
     results = find_abstractions(low_model, high_model, inputs,total_high_interventions, fixed_assignments, lambda x: x)
 
     fail_list = []
-    for result,mapping in results:
+    for result, mapping in results:
         fail = False
+        result, realization_to_inputs = result
+        # print("type of result", type(result))
         for interventions in result:
             low_intervention, high_intervention = interventions
-            print(mapping)
+            print("mapping", mapping)
             print("low:",low_intervention.intervention.values)
             print("lowbase:",low_intervention.base.values)
             print("high:", high_intervention.intervention.values)

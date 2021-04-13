@@ -157,7 +157,7 @@ def test_mapping(low_model,high_model,high_inputs,total_high_interventions,mappi
         #print(key, len(total_realizations[key]))
         #for realization in total_realizations[key]:
         #    print(np.fromstring(realization))
-    return (result,realizations_to_inputs)
+    return (result, realizations_to_inputs)
 
 
 
@@ -189,7 +189,7 @@ def find_abstractions(low_model, high_model, high_inputs, total_high_interventio
     #print(len(mappings))
     for mapping in mappings:
        print(mapping)
-    return None
+
     print("testing mappings")
     for mapping in mappings:
     #    print(len(test_mapping(low_model, high_model, high_inputs,total_high_interventions, mapping, input_mapping).keys()))
