@@ -31,7 +31,8 @@ class Intervention:
             intervention during computation.
         :param cache_base_results: Only useful if `base` is provided as a dict.
             If true then cache the results of the base run during computation.
-            If `base` is a GraphInput object then its `cache_results`
+            If `base` is a GraphInput object then its `cache_results` will
+            override this setting.
         :param batched: If true then indicates `values` contains a batch of
             inputs, i.e. the value of the dict must be a sequence.
         :param batch_dim: If inputs are batched and are pytorch tensors, the

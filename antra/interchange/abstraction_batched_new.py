@@ -15,8 +15,6 @@ from torch.utils.data import IterableDataset, DataLoader
 from typing import *
 
 
-
-
 class CausalAbstraction:
     def __init__(
             self,
@@ -28,6 +26,8 @@ class CausalAbstraction:
             fixed_node_mapping: AbstractionMappingType,
             high_to_low_keys: Optional[Dict[SerializableType, SerializableType]]=None,
             unwanted_low_nodes: Optional[Sequence[str]]=None,
+            low_nodes_to_indices: Optional[Dict[NodeName, List[LocationType]]]=None,
+            interv_collate_fn: Union[str, Callable, None]=None,
             batch_size: int=1,
             device: Union[str, torch.device]=None
     ):
@@ -38,25 +38,44 @@ class CausalAbstraction:
         :param high_inputs:
         :param high_interventions:
         :param fixed_node_mapping:
-        :param high_to_low_keys:
+        :param high_to_low_keys: A mapping from high- to low-level model
+            inputs. By default, assume `low_inputs` and `high_inputs` are the
+            same length and the mapping between them is same as they are ordered
+            in the list.
         :param unwanted_low_nodes:
+        :param low_nodes_to_indices:
+        :param interv_collate_fn:
         :param batch_size:
         :param device:
         """
+        self.low_model = low_model
+        self.high_model = high_model
         self.low_inputs = low_inputs
         self.high_inputs = high_inputs
         self.high_interventions = high_interventions
-        self.mappings = create_possible_mappings(low_model, high_model, fixed_node_mapping,
-                                                 unwanted_low_nodes)
+        self.mappings = create_possible_mappings(
+            low_model, high_model, fixed_node_mapping, unwanted_low_nodes,
+            low_nodes_to_indices)
 
         self.low_keys_to_inputs = {gi.keys: gi for gi in low_inputs}
         self.high_keys_to_inputs = {gi.keys: gi for gi in high_inputs}
         if not high_to_low_keys:
+            assert len(low_inputs) == len(high_inputs)
             high_to_low_keys = {hi.keys : lo.keys for hi, lo in zip(low_inputs, high_inputs)}
         self.high_to_low_keys = high_to_low_keys
-        self.high_keys_to_low_inputs = {hi_key: self.low_keys_to_inputs[lo_key] for hi_key, lo_key in high_to_low_keys.items()}
+        self.high_keys_to_low_inputs = {hi_key: self.low_keys_to_inputs[lo_key]
+                                        for hi_key, lo_key in high_to_low_keys.items()}
 
         self.batch_size = batch_size
+
+        if isinstance(interv_collate_fn, str):
+            if interv_collate_fn == "bert":
+                self.interv_collate_fn = bert_input_collate_fn
+            else:
+                raise ValueError(f"Invalid name for interv_collate_fn: {interv_collate_fn}")
+        else:
+            self.interv_collate_fn = interv_collate_fn
+
         self.device = device
 
     @torch.no_grad()
@@ -67,15 +86,46 @@ class CausalAbstraction:
         return results
 
     def test_mapping(self, mapping: AbstractionMappingType):
-        icd = InterchangeDataset(mapping, self)
-        icd_dataloader = DataLoader(icd, shuffle=False, batch_size=self.batch_size, collate_fn=icd.collate_fn)
+        icd = InterchangeDataset(mapping, self, collate_fn=self.interv_collate_fn)
+        icd_dataloader = icd.get_dataloader(batch_size=self.batch_size, shuffle=False)
+
+        batched = self.batch_size > 1
 
         while True:
+            new_realizations = {}
             for batch in icd_dataloader:
-                pass
+                batch = self.prepare_batch(batch)
+
+                low_intervention = batch["low_intervention"]
+                high_intervention = batch["high_intervention"]
+
+                high_base_res, high_interv_res = self.high_model.intervene_all_nodes(high_intervention)
+                low_base_res, low_interv_res = self.low_model.intervene_all_nodes(low_intervention)
+
+                return high_base_res, high_interv_res, low_base_res, low_interv_res
+
+                realizations, realization_inputs = self._create_new_realizations()
+
+    def prepare_batch(self, batch):
+        batch = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
+        return batch
+
+    def _create_new_realizations(self, high_intervention, low_intervention, high_interv_res, low_interv_res, actual_batch_size):
+        realizations: Dict[Tuple[NodeName, Any], Any] = {}
+        realization_inputs: Dict[Tuple[NodeName, Any], Intervention] = {}
+
+        if actual_batch_size > 1:
+            pass
+        else:
+            raise NotImplementedError
+
+        return realizations, realization_inputs
+
+
+
 
 class InterchangeDataset(IterableDataset):
-    def __init__(self, mapping: AbstractionMappingType, data: CausalAbstraction, device=None):
+    def __init__(self, mapping: AbstractionMappingType, data: CausalAbstraction, device=None, collate_fn=None):
         super(InterchangeDataset, self).__init__()
         self.low_inputs = data.low_inputs
         self.high_inputs = data.high_inputs
@@ -93,6 +143,8 @@ class InterchangeDataset(IterableDataset):
         self.mapping = mapping
 
         self.device = torch.device("cpu") if device is None else device
+
+        self.collate_fn = collate_fn if collate_fn is not None else default_collate_fn
 
         # self.populate_dataset()
 
@@ -165,9 +217,12 @@ class InterchangeDataset(IterableDataset):
                     "low_output": None
                 }
 
-    def collate_fn(self, batch):
-        # pack everything into a batch
-        low_interventions = [batch[i]["low_intervention"] for i in range(len(batch))]
-        high_interventions = [batch[i]["high_intervention"] for i in range(len(batch))]
+    def get_dataloader(self, **kwargs):
+        return DataLoader(self, collate_fn=self.collate_fn, **kwargs)
 
 
+def default_collate_fn(batch):
+    pass
+
+def bert_input_collate_fn(batch):
+    pass

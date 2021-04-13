@@ -21,7 +21,8 @@ def get_nodes_and_dependencies(graph: ComputationGraph):
         fill_dependencies(graph.root)
         return nodes, dependencies
 
-def get_indices(graph: ComputationGraph, node: NodeName, nodes_to_indices: Dict[NodeName, List[LocationType]]):
+def get_indices(node: NodeName,
+                nodes_to_indices: Dict[NodeName, List[LocationType]]):
     if nodes_to_indices:
         indices = nodes_to_indices[node]
     else:
@@ -62,7 +63,7 @@ def get_locations(
     for viable_node in viable_nodes:
         if unwanted_low_nodes and viable_node in unwanted_low_nodes:
             continue
-        for index in get_indices(graph, viable_node, nodes_to_indices):
+        for index in get_indices(viable_node, nodes_to_indices):
             result.append({viable_node:index})
     return result
 

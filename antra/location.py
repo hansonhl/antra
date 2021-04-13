@@ -6,7 +6,7 @@ SerializedLocationType = Union[int, str, Tuple["SerializedLocationType", ...]]
 class Location:
     """A helper class to manage parsing of indices and slices"""
 
-    def __init__(self, loc=None):
+    def __init__(self, loc: Union[None, LocationType, str]=None):
         self._loc = Location.process(loc) if loc else None
 
     def __getitem__(self, item):
