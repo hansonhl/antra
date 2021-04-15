@@ -7,14 +7,8 @@ from antra.compgraphs.bert import *
 
 from .dataset import SentimentDataHelper
 
-@pytest.fixture()
-def bert_tokenizer():
-    return transformers.BertTokenizer.from_pretrained("bert-base-uncased")
-
-
-@pytest.fixture()
-def sentiment_data(bert_tokenizer):
-    return SentimentDataHelper("tests/bert_compgraph/data/senti.train.tsv",
+bert_tokenizer = transformers.BertTokenizer.from_pretrained("bert-base-uncased")
+sentiment_data = SentimentDataHelper("tests/bert_compgraph/data/senti.train.tsv",
                                "tests/bert_compgraph/data/senti.dev.tsv",
                                "tests/bert_compgraph/data/senti.test.tsv",
                                tokenizer=bert_tokenizer)
@@ -34,7 +28,7 @@ def bert_masked_seq_classification_model():
     print("loading model...")
     return transformers.BertForSequenceClassification.from_pretrained("bert-base-uncased")
 
-def test_bert_forward(sentiment_data, bert_model):
+def test_bert_forward(bert_model):
     model = bert_model
 
     device = torch.device("cuda")
@@ -61,7 +55,34 @@ def test_bert_forward(sentiment_data, bert_model):
             assert torch.allclose(res, pooler_output)
 
 
-def test_bert_intervention(sentiment_data, bert_model):
+def test_batch_device_conversion_forward(bert_model):
+    model = bert_model
+
+    device = torch.device("cuda")
+    model = model.to(device)
+    g = BertModelCompGraph(model)
+    # print("leaves", g.leaves)
+
+    dataloader = DataLoader(sentiment_data.dev, batch_size=16, shuffle=False)
+    with torch.no_grad():
+        for batch in dataloader:
+            gpu_batch = {k: v.to(device) for k, v in batch.items()}
+            # print("input_ids.shape", batch["input_ids"].shape)
+            # print("attn_mask.shape", batch["attention_mask"].shape)
+            outputs = model(
+                input_ids=gpu_batch["input_ids"],
+                attention_mask=gpu_batch["attention_mask"],
+                token_type_ids=gpu_batch["token_type_ids"],
+                return_dict=True
+            )
+            pooler_output = outputs.pooler_output
+            # print("batch from dataloader", batch)
+            gi = BertGraphInput(batch).to(device)
+            assert gi.get_batch_size() == gpu_batch["input_ids"].shape[0]
+            res = g.compute(gi)
+            assert torch.allclose(res, pooler_output)
+
+def test_bert_intervention(bert_model):
     model = bert_model
 
     device = torch.device("cuda")
@@ -95,8 +116,43 @@ def test_bert_intervention(sentiment_data, bert_model):
                 # for interv_res, expected_res in zip(interv_after, expected_after):
                 #     assert torch.allclose(interv_res, expected_res)
 
+def test_batch_device_conversion_intervention(bert_model):
+    model = bert_model
 
-def test_bert_masked_lm_model_intervention(sentiment_data, bert_masked_lm_model):
+    device = torch.device("cuda")
+    model = model.to(device)
+    g = BertModelCompGraph(model)
+
+    dataloader = DataLoader(sentiment_data.dev, batch_size=32, shuffle=True)
+    with torch.no_grad():
+        for _ in range(3):
+            for batch in dataloader:
+                gpu_batch = {k: v.to(device) for k, v in batch.items()}
+                batch_size, _ = gpu_batch["input_ids"].shape
+
+                gi = BertGraphInput(batch).to(device)
+                assert gi.get_batch_size() == batch_size
+                base_res = g.compute(gi)
+                layer_11_output = g.compute_node("bert_layer_11", gi).detach().clone()
+
+                interv_values = torch.randn(batch_size, 50)
+                interv_dict = {"bert_layer_11[:,0,:50]": interv_values}
+                interv = Intervention.batched(gi, interv_dict).to(device)
+                interv_before, interv_after = g.intervene(interv)
+                assert torch.allclose(interv_before, base_res)
+
+                layer_11_output[:,0,:50] = interv_values
+
+                pooler_input = layer_11_output[:,0]
+                dense_out = model.pooler.dense(pooler_input)
+                expected_after = model.pooler.activation(dense_out)
+
+                assert torch.allclose(interv_after, expected_after, atol=1e-06, rtol=1e-04)
+                # for interv_res, expected_res in zip(interv_after, expected_after):
+                #     assert torch.allclose(interv_res, expected_res)
+
+
+def test_bert_masked_lm_model_intervention(bert_masked_lm_model):
     model = bert_masked_lm_model
 
     device = torch.device("cuda")
@@ -128,7 +184,7 @@ def test_bert_masked_lm_model_intervention(sentiment_data, bert_masked_lm_model)
                 # for interv_res, expected_res in zip(interv_after, expected_after):
                 #     assert torch.allclose(interv_res, expected_res)
 
-def test_bert_seq_classification_intervention(sentiment_data, bert_masked_seq_classification_model):
+def test_bert_seq_classification_intervention(bert_masked_seq_classification_model):
     model = bert_masked_seq_classification_model
     model.eval()
     device = torch.device("cuda")

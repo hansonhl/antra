@@ -1,18 +1,29 @@
-# This script is the same as `causal_abstraction/interchange.py`.
-# It is duplicated here to support old pickled experiment result files.
-
 import torch
 import copy
+from collections import defaultdict
 
 from antra import *
 from antra import GraphInput
-from antra.location import serialize_location, deserialize_location
-from antra.interchange.mapping import create_possible_mappings, AbstractionMappingType
-from antra.utils import SerializableType
+from antra.location import serialize_location, deserialize_location, SerializedLocationType, reduce_dim
+from antra.interchange.mapping import create_possible_mappings, AbstractionMapping
+from antra.utils import SerializableType, idx_by_dim
 
 from torch.utils.data import IterableDataset, DataLoader
 
 from typing import *
+
+HighNodeName = NodeName
+LowNodeName = NodeName
+
+Realization = Dict[(LowNodeName, SerializedLocationType), Any]
+RealizationMapping = Dict[(HighNodeName, SerializableType), List[Realization]]
+
+def merge_realization_mappings(current: RealizationMapping, other: RealizationMapping):
+    for high_node_and_loc in other.keys():
+        if high_node_and_loc not in current:
+            current[high_node_and_loc] = other[high_node_and_loc]
+        else:
+            current[high_node_and_loc].extend(other[high_node_and_loc])
 
 
 class CausalAbstraction:
@@ -23,11 +34,10 @@ class CausalAbstraction:
             low_inputs: Sequence[GraphInput],
             high_inputs: Sequence[GraphInput],
             high_interventions: Sequence[Intervention],
-            fixed_node_mapping: AbstractionMappingType,
+            fixed_node_mapping: AbstractionMapping,
             high_to_low_keys: Optional[Dict[SerializableType, SerializableType]]=None,
             unwanted_low_nodes: Optional[Sequence[str]]=None,
-            low_nodes_to_indices: Optional[Dict[NodeName, List[LocationType]]]=None,
-            interv_collate_fn: Union[str, Callable, None]=None,
+            low_nodes_to_indices: Optional[Dict[LowNodeName, List[LocationType]]]=None,
             batch_size: int=1,
             device: Union[str, torch.device]=None
     ):
@@ -44,7 +54,6 @@ class CausalAbstraction:
             in the list.
         :param unwanted_low_nodes:
         :param low_nodes_to_indices:
-        :param interv_collate_fn:
         :param batch_size:
         :param device:
         """
@@ -68,14 +77,6 @@ class CausalAbstraction:
 
         self.batch_size = batch_size
 
-        if isinstance(interv_collate_fn, str):
-            if interv_collate_fn == "bert":
-                self.interv_collate_fn = bert_input_collate_fn
-            else:
-                raise ValueError(f"Invalid name for interv_collate_fn: {interv_collate_fn}")
-        else:
-            self.interv_collate_fn = interv_collate_fn
-
         self.device = device
 
     @torch.no_grad()
@@ -85,47 +86,63 @@ class CausalAbstraction:
             results.append(self.test_mapping(mapping))
         return results
 
-    def test_mapping(self, mapping: AbstractionMappingType):
+    def test_mapping(self, mapping: AbstractionMapping):
+        self.curr_mapping = mapping
         icd = InterchangeDataset(mapping, self, collate_fn=self.interv_collate_fn)
         icd_dataloader = icd.get_dataloader(batch_size=self.batch_size, shuffle=False)
 
         batched = self.batch_size > 1
 
         while True:
-            new_realizations = {}
+            new_realizations: RealizationMapping = {}
             for batch in icd_dataloader:
-                batch = self.prepare_batch(batch)
+                batch = {k: v.to(self.device) if isinstance(v, (torch.Tensor, Intervention, GraphInput)) else v
+                         for k, v in batch.items()}
 
                 low_intervention = batch["low_intervention"]
                 high_intervention = batch["high_intervention"]
 
+                actual_batch_size = low_intervention.get_batch_size()
+
                 high_base_res, high_interv_res = self.high_model.intervene_all_nodes(high_intervention)
                 low_base_res, low_interv_res = self.low_model.intervene_all_nodes(low_intervention)
 
-                return high_base_res, high_interv_res, low_base_res, low_interv_res
+                realizations = self._create_new_realizations(
+                    low_intervention, high_intervention, high_interv_res, low_interv_res, actual_batch_size)
 
-                realizations, realization_inputs = self._create_new_realizations()
+                merge_realization_mappings(new_realizations, realizations)
 
-    def prepare_batch(self, batch):
-        batch = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
-        return batch
+            # TODO: start from here
 
-    def _create_new_realizations(self, high_intervention, low_intervention, high_interv_res, low_interv_res, actual_batch_size):
-        realizations: Dict[Tuple[NodeName, Any], Any] = {}
-        realization_inputs: Dict[Tuple[NodeName, Any], Intervention] = {}
+    def interv_collate_fn(self, batch):
+        return default_collate_fn(batch)
 
-        if actual_batch_size > 1:
-            pass
-        else:
-            raise NotImplementedError
+    def _create_new_realizations(self, high_intervention: Intervention, low_intervention: Intervention,
+                                 high_interv_res: Dict[str, Any], low_interv_res: Dict[str, Any],
+                                 actual_batch_size: int) -> RealizationMapping:
+        realization_mapping: RealizationMapping = defaultdict(list)
 
-        return realizations, realization_inputs
+        for high_node, high_values in high_interv_res.items():
+            if not high_intervention.is_empty() and high_node not in high_intervention.affected_nodes:
+                continue
+            realizations = [{}] * actual_batch_size
+            for low_node, low_loc in self.curr_mapping[high_node].items():
+                ser_singleton_low_loc = serialize_location(reduce_dim(low_loc, dim=low_intervention.batch_dim))
+                low_values = low_interv_res[low_node][low_loc]
+                for i in range(actual_batch_size):
+                    realizations[i][(low_node, ser_singleton_low_loc)] = idx_by_dim(low_values, i, low_intervention.batch_dim)
+
+            for i in range(actual_batch_size):
+                ser_high_value = idx_by_dim(high_values, i, high_intervention.batch_dim)
+                realization_mapping[(high_node, ser_high_value)].append(realizations[i])
+
+        return realization_mapping
 
 
 
 
 class InterchangeDataset(IterableDataset):
-    def __init__(self, mapping: AbstractionMappingType, data: CausalAbstraction, device=None, collate_fn=None):
+    def __init__(self, mapping: AbstractionMapping, data: CausalAbstraction, device=None, collate_fn=None):
         super(InterchangeDataset, self).__init__()
         self.low_inputs = data.low_inputs
         self.high_inputs = data.high_inputs
@@ -167,44 +184,52 @@ class InterchangeDataset(IterableDataset):
         high_interv: GraphInput = high_intervention.intervention
         low_base = self.high_keys_to_low_inputs[high_intervention.base.key]
 
-        all_partial_intervs = [{}]
+        all_partial_intervs: List[Realization] = [{}]
         for high_var_name, high_var_value in high_interv.values.items():
-            low_var_name, low_loc = list(self.mapping[high_var_name].items())[0]
-            serialized_low_loc = serialize_location(low_loc)
-
-            new_partial_intervs = [{}]
+            new_partial_intervs: List[Realization] = [{}]
             for pi in all_partial_intervs:
                 for realization in self.all_realizations[(high_var_name, high_var_value)]:
+                    # realization is Dict[(low node name, serialized location), value]
                     pi_copy = copy.copy(pi)
-
-                    pi_copy[(low_var_name, serialized_low_loc)] = realization
+                    pi_copy.update(realization)
                     new_partial_intervs.append(pi_copy)
                 for realization in self.curr_realizations[(high_var_name, high_var_value)]:
                     pi_copy = copy.copy(pi)
-                    pi_copy[(low_var_name, serialized_low_loc)] = realization
+                    pi_copy.update(realization)
                     pi_copy["accepted"] = True
                     new_partial_intervs.append(pi_copy)
 
             all_partial_intervs = new_partial_intervs
 
         low_interventions = []
-        for interv_dict in all_partial_intervs:
-            if "accept" not in interv_dict:
+        for pi_dict in all_partial_intervs:
+            if "accept" not in pi_dict:
                 continue
             else:
-                del interv_dict["accept"]
-                interv_dict = {
-                    low_var_name: val
-                    for (low_var_name, _), val in interv_dict.items()
-                }
-                loc_dict = {
-                    low_var_name: deserialize_location(low_serialized_loc)
-                    for low_var_name, low_serialized_loc in interv_dict.keys()
-                }
-                new_low_interv = Intervention(low_base, intervention=interv_dict, location=loc_dict)
+                del pi_dict["accept"]
+                new_low_interv = self.get_intervention_from_realizations(low_base, pi_dict) # unbatched
                 low_interventions.append(new_low_interv)
 
         return low_interventions
+
+    def get_intervention_from_realizations(self, low_base: GraphInput, partial_interv_dict: Realization) -> Intervention:
+        # partial_interv_dict may contain multiple entries with same node but different locations,
+        # e.g {(nodeA, loc1): val, (nodeA, loc2): val}, need to find and merge them
+        val_dict, loc_dict = defaultdict(list)
+
+        for (node_name, ser_low_loc), val in partial_interv_dict.items():
+            val_dict[node_name].append(val)
+            loc_dict[node_name].append(deserialize_location(ser_low_loc))
+
+        for node_name in val_dict.keys():
+            if len(val_dict[node_name]) == 1:
+                val_dict[node_name] = val_dict[node_name][0]
+            if len(loc_dict[node_name]) == 1:
+                loc_dict[node_name] = loc_dict[node_name][0]
+
+        return Intervention(low_base, intervention=val_dict, location=loc_dict)
+
+
 
     def __iter__(self):
         for high_intervention in self.high_interventions:

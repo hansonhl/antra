@@ -4,6 +4,8 @@ import copy
 from .location import Location
 from typing import *
 
+_LOC = Location()
+
 # type aliases
 SerializableType = Union[bool, int, float, str, frozenset, bytes, complex, Tuple["SerializableType", ...]]
 
@@ -82,6 +84,17 @@ def serialize_batch(d: Dict[str, Any], dim: int) -> List[Tuple]:
     split_values = [v.unbind(dim=dim) if is_torch_tensor(v) else _split_np_array(v, dim) for v in d.values()]
     return [tuple(sorted((k, serialize(a)) for k, a in zip(d.keys(), x)))
             for x in zip(*split_values)]
+
+# TODO: test this function
+def idx_by_dim(x: Any, idx: int, dim: int):
+    if is_torch_tensor(x) or is_numpy_array(x):
+        if dim == 0:
+            return x[idx]
+        else:
+            loc = tuple([_LOC[:]] * dim + [idx])
+            return x[loc]
+    else:
+        raise ValueError
 
 # def stringify_mapping(m):
 #     res = {}

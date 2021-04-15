@@ -6,7 +6,7 @@ from antra import *
 from typing import *
 
 NodeName = str
-AbstractionMappingType = Dict[NodeName, Dict[NodeName, LocationType]]
+AbstractionMapping = Dict[NodeName, Dict[NodeName, LocationType]]
 
 def get_nodes_and_dependencies(graph: ComputationGraph):
         nodes = [node_name for node_name in graph.nodes]
@@ -70,10 +70,10 @@ def get_locations(
 def create_possible_mappings(
         low_model: ComputationGraph,
         high_model: ComputationGraph,
-        fixed_assignments: AbstractionMappingType,
+        fixed_assignments: AbstractionMapping,
         unwanted_low_nodes: Optional[List[NodeName]]=None,
         nodes_to_indices: Optional[Dict[NodeName, List[LocationType]]]=None) \
-        -> List[AbstractionMappingType]:
+        -> List[AbstractionMapping]:
     """
     :param low_model:
     :param high_model:

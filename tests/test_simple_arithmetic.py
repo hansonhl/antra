@@ -205,9 +205,9 @@ def test_arithmetic_graph2_interv(arithmetic_graph2, input_leaf1):
 
 # TODO: Test multiple sites of intervention
 
-def test_empty_interv(arithmetic_graph2, input_leaf1):
-    i = Intervention(input_leaf1)
-
-    with pytest.raises(RuntimeError) as excinfo:
-        _, _ = arithmetic_graph2.intervene(i)
-        assert "Must specify" in str(excinfo)
+# def test_empty_interv(arithmetic_graph2, input_leaf1):
+#     i = Intervention(input_leaf1)
+#
+#     with pytest.raises(RuntimeError) as excinfo:
+#         _, _ = arithmetic_graph2.intervene(i)
+#         assert "Must specify" in str(excinfo)

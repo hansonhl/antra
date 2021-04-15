@@ -116,7 +116,7 @@ class ComputationGraph:
 
         return base_res, interv_res
 
-    def intervene_all_nodes(self, intervention: Intervention):
+    def intervene_all_nodes(self, intervention: Intervention) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """ Get the output for every node after an intervention in the graph.
 
         This will temporarily force the graph to cache the results of the inputs.
@@ -124,7 +124,7 @@ class ComputationGraph:
         :param inputs:
         :return:
         """
-        base_res = self.compute_all_nodes(intervention.base)
+        base_res_dict = self.compute_all_nodes(intervention.base)
 
         self._validate_interv(intervention)
         intervention.find_affected_nodes(self)
@@ -143,7 +143,7 @@ class ComputationGraph:
             self.clear_caches(intervention)
             intervention.cache_results = False
 
-        return res_dict
+        return base_res_dict, res_dict
 
     def clear_caches(self, inputs: Union[GraphInput, Intervention, None]=None):
         """ Clear all caches, or clear a specified cache entry for a given input.

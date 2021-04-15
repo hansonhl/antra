@@ -1,7 +1,9 @@
+import logging
 from typing import Dict, Any, Sequence
 
-from .utils import serialize, serialize_batch
+from .utils import serialize, serialize_batch, is_torch_tensor, is_numpy_array
 
+logger = logging.getLogger(__name__)
 
 class GraphInput:
     """ A hashable input object that stores a dict mapping names of nodes to
@@ -89,12 +91,29 @@ class GraphInput:
     def is_empty(self):
         return not self._values
 
+    def get_batch_size(self):
+        if not self.batched:
+            return None
+        batch_size = None
+        for k, v in self.values.items():
+            if self.key_leaves and k not in self.key_leaves: continue
+            if is_torch_tensor(v) or is_numpy_array(v):
+                if len(v.shape) > self.batch_dim:
+                    batch_size = v.shape[self.batch_dim]
+                    break
+        return batch_size
+
+
+
     def to(self, device):
         """Move all data to a pytorch Device.
 
         This does NOT modify the original GraphInput object but returns a new
         one. """
         # assert all(isinstance(t, torch.Tensor) for _, t in self._values.items())
-
-        new_values = {k: v.to(device) for k, v in self._values.items()}
-        return GraphInput(new_values)
+        new_values = {k: v.to(device) if is_torch_tensor(v) else v for k, v in self._values.items()}
+        return GraphInput(
+            new_values,
+            cache_results=self.cache_results,
+            batched=self.batched,
+            batch_dim=self.batch_dim, keys=self.keys, key_leaves=self.key_leaves)

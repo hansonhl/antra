@@ -276,3 +276,26 @@ class Intervention:
         affected(graph.root)
         self.affected_nodes = affected_nodes
         return affected_nodes
+
+    def get_batch_size(self):
+        if not self.batched: return None
+        return self.base.get_batch_size()
+
+    def is_empty(self):
+        return self.intervention.is_empty()
+
+    def to(self, device):
+        """Move all data to a pytorch Device.
+
+        This does NOT modify the original GraphInput object but returns a new
+        one. """
+        # assert all(isinstance(t, torch.Tensor) for _, t in self._values.items())
+        new_base = self.base.to(device)
+        new_intervention = self.intervention.to(device)
+        new_locs = self.location.copy()
+
+        return Intervention(new_base, new_intervention, new_locs,
+                            cache_results=self.cache_results,
+                            cache_base_results=self.cache_base_results,
+                            batched=self.batched,
+                            batch_dim=self.batch_dim)

@@ -79,3 +79,11 @@ def deserialize_location(s: SerializedLocationType) -> LocationType:
         return tuple(deserialize_location(s))
 
 
+def reduce_dim(l: Tuple[LocationType, ...], dim=0) -> LocationType:
+    if dim == 0:
+        return l[1:]
+    elif dim == -1:
+        return l[:-1]
+    else:
+        ll = list(l)
+        return tuple(ll[:dim] + ll[dim+1:])
