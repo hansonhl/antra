@@ -8,4 +8,4 @@ from .constructor import CompGraphConstructor
 LOC = Location()
 
 from .location import LocationType
-from .utils import SerializableType
+from .utils import SerializedType

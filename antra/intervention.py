@@ -1,6 +1,6 @@
 import re
 
-from .location import Location, location_to_str
+from .location import Location, location_to_str, LocationType
 from .graph_input import GraphInput
 from .utils import serialize, serialize_batch
 
@@ -56,7 +56,7 @@ class Intervention:
     @classmethod
     def batched(cls, base: Union[Dict, GraphInput],
                 intervention: Union[Dict, GraphInput]=None,
-                location: Dict=None, cache_results: bool=True,
+                location: Dict[str, LocationType]=None, cache_results: bool=True,
                 cache_base_results: bool=True,
                 batch_dim: int=0):
         """ Specify a batched intervention object"""

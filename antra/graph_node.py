@@ -60,7 +60,7 @@ class GraphNode:
         self.use_default = use_default
         self.default_value = default_value
 
-    def __call__(self, f):
+    def __call__(self, f) -> "GraphNode":
         """Invoked immediately after `__init__` during `@GraphNode()` decoration
 
         :param f: the function to which the decorator is attached

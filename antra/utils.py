@@ -7,7 +7,7 @@ from typing import *
 _LOC = Location()
 
 # type aliases
-SerializableType = Union[bool, int, float, str, frozenset, bytes, complex, Tuple["SerializableType", ...]]
+SerializedType = Union[bool, int, float, str, frozenset, bytes, complex, None, Tuple["SerializableType", ...]]
 
 def is_torch_tensor(x):
     if 'torch' in sys.modules:
@@ -27,6 +27,9 @@ def is_numpy_scalar(x):
     else:
         return False
 
+def is_serialized(x):
+    return isinstance(x, (bool, int, float, str, frozenset, bytes, complex)) or x is None or isinstance(x, tuple) and all(is_serialized(y) for y in x)
+
 def copy_helper(x):
     if isinstance(x, (list, tuple, str, dict)) or is_numpy_array(x):
         return copy.deepcopy(x)
@@ -37,7 +40,7 @@ def copy_helper(x):
 
 def serialize(x):
     """ Serialize x so that it is hashable. Recursively converts everything into tuples."""
-    if isinstance(x, (bool, int, float, str, frozenset, bytes, complex)):
+    if isinstance(x, (bool, int, float, str, frozenset, bytes, complex)) or x is None:
         return x
     elif is_numpy_scalar(x):
         return x

@@ -80,10 +80,17 @@ def deserialize_location(s: SerializedLocationType) -> LocationType:
 
 
 def reduce_dim(l: Tuple[LocationType, ...], dim=0) -> LocationType:
-    if dim == 0:
-        return l[1:]
-    elif dim == -1:
-        return l[:-1]
-    else:
-        ll = list(l)
-        return tuple(ll[:dim] + ll[dim+1:])
+    if not dim < len(l):
+        raise ValueError(f"Cannot reduce {len(l)}-dim index at dim {dim} (must be < {len(l)})")
+    return l[:dim] + l[dim+1:] if dim != -1 else l[:-1]
+
+
+_LOC = Location()
+
+def expand_dim(l: LocationType, dim=0) -> LocationType:
+    if not -len(l) - 1 <= dim <= len(l):
+        raise ValueError(f"Cannot expand {len(l)}-dim index at dim {dim} (must be <= {len(l)})")
+    if not isinstance(l, tuple):
+        l = (l,)
+    dim = dim % (len(l) + 1)
+    return l[:dim] + (_LOC[:],) + l[dim:]

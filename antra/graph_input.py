@@ -63,7 +63,7 @@ class GraphInput:
                    batch_dim=batch_dim, keys=keys)
 
     @property
-    def values(self):
+    def values(self) -> Dict[str, Any]:
         return self._values
 
     @values.setter

@@ -1,5 +1,5 @@
 from antra import ComputationGraph, GraphNode, Intervention, Location
-from antra.interchange.abstraction import find_abstractions
+from antra.interchange.abstraction_single_old import find_abstractions
 import numpy as np
 
 class BooleanLogicProgram(ComputationGraph):
