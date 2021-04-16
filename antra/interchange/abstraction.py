@@ -18,8 +18,8 @@ from typing import *
 HighNodeName = NodeName
 LowNodeName = NodeName
 
-Realization = Dict[(LowNodeName, location.SerializedLocationType), Any]
-RealizationMapping = Dict[(HighNodeName, SerializedType), List[Realization]]
+Realization = Dict[Tuple[LowNodeName, location.SerializedLocationType], Any]
+RealizationMapping = Dict[Tuple[HighNodeName, SerializedType], List[Realization]]
 
 
 class CausalAbstraction:
@@ -38,7 +38,6 @@ class CausalAbstraction:
             batch_size: int = 1,
             cache_interv_results: bool = False,
             cache_base_results: bool = True,
-            non_batch_leaves: Sequence[str] = None,
             device: Union[str, torch.device] = None
     ):
         """
@@ -90,7 +89,11 @@ class CausalAbstraction:
         self.batch_size = batch_size
         self.cache_interv_results = cache_interv_results
         self.cache_base_results = cache_base_results
-        self.non_batch_leaves = non_batch_leaves
+
+        self.high_key_leaves = high_inputs[0].key_leaves
+        self.low_key_leaves = low_inputs[0].key_leaves
+        self.high_non_batch_leaves = high_inputs[0].non_batch_leaves
+        self.low_non_batch_leaves = low_inputs[0].non_batch_leaves
 
         self.device = device
 
@@ -162,7 +165,7 @@ class CausalAbstraction:
                 realizations = [{}] * actual_batch_size
                 for low_node, low_loc in self.curr_mapping[high_node].items():
                     ser_singleton_low_loc = location.serialize_location(
-                        location.reduce_dim(low_loc, dim=low_intervention.batch_dim))
+                        location.reduce_dim(low_loc, low_intervention.batch_dim))
                     low_values = low_interv_res[low_node][low_loc]
                     for i in range(actual_batch_size):
                         realizations[i][(low_node, ser_singleton_low_loc)] = \
@@ -191,23 +194,38 @@ class CausalAbstraction:
             high_node_to_minibatches[high_nodes].append(d)
         minibatches = []
         for minibatch_dicts in high_node_to_minibatches.values():
-            low_interv = pack_interventions(
+            low_base_dict, low_interv_dict, low_loc_dict = pack_interventions(
                 [d["low_intervention"] for d in minibatch_dicts],
                 batch_dim=self.batch_dim,
-                cache_results=self.cache_interv_results,
-                cache_base_results=self.cache_base_results,
-                non_batch_inputs=self.non_batch_leaves
+                non_batch_inputs=self.low_non_batch_leaves
             )
+            low_base_input = GraphInput(
+                low_base_dict, batched=True, batch_dim=self.batch_dim,
+                cache_results=self.cache_base_results,
+                key_leaves=self.low_key_leaves,
+                non_batch_leaves=self.low_non_batch_leaves
+            )
+            low_ivn = Intervention.batched(
+                low_base_input, low_interv_dict, low_loc_dict,
+                batch_dim=self.batch_dim, cache_base_results=self.cache_interv_results)
 
-            high_interv = pack_interventions(
+            high_base_dict, high_interv_dict, high_loc_dict = pack_interventions(
                 [d["high_intervention"] for d in minibatch_dicts],
                 batch_dim=self.batch_dim,
-                cache_results=self.cache_interv_results,
-                cache_base_results=self.cache_base_results,
-                non_batch_inputs=self.non_batch_leaves
+                non_batch_inputs=self.high_non_batch_leaves
             )
-            minibatches.append({"low_intervention": low_interv,
-                                "high_intervention": high_interv})
+            high_base_input = GraphInput(
+                high_base_dict, batched=True, batch_dim=self.batch_dim,
+                cache_results=self.cache_base_results,
+                key_leaves=self.high_key_leaves,
+                non_batch_leaves=self.high_non_batch_leaves
+            )
+            high_ivn = Intervention.batched(
+                high_base_input, high_interv_dict, high_loc_dict,
+                batch_dim=self.batch_dim, cache_base_results=self.cache_interv_results)
+            
+            minibatches.append({"low_intervention": low_ivn,
+                                "high_intervention": high_ivn})
 
         return minibatches
 
@@ -355,14 +373,11 @@ def merge_realization_mappings(current: RealizationMapping, other: RealizationMa
             current[high_node_and_val].extend(other[high_node_and_val])
 
 
-
 def pack_interventions(
         interventions: Sequence[Intervention],
         batch_dim: int = 0,
-        cache_results: bool = False,
-        cache_base_results: bool = True,
-        non_batch_inputs: Optional[set] = None
-    ) -> Intervention:
+        non_batch_inputs: Optional[Sequence[str]] = None
+    ) -> Tuple[Dict, Dict, Dict]:
     """ Pack a sequence of individual interventions into one batched intervention.
     All interventions must be in the same nodes and locations.
 
@@ -373,42 +388,50 @@ def pack_interventions(
     :param non_batch_inputs:
     :return:
     """
-    base_lists, interv_lists = defaultdict(list), defaultdict(list)
+    base_lists, ivn_lists = defaultdict(list), defaultdict(list)
     loc_dict = {}
     multi_loc_nodes = set()
     batch_size = len(interventions)
-    interv_is_empty = False
+    ivn_is_empty = False
 
-    for interv in interventions:
-        for leaf, val in interv.base.values:
+    for ivn in interventions:
+        for leaf, val in ivn.base.values.items():
             base_lists[leaf].append(val)
 
-        if interv_is_empty and not interv.is_empty():
+        if ivn_is_empty and not ivn.is_empty():
             raise RuntimeError(f"Cannot pack empty interventions together with non-empty ones")
-        if interv.is_empty(): interv_is_empty = True
+        if ivn.is_empty(): ivn_is_empty = True
 
-        for node, val in interv.intervention.values:
+        for node, val in ivn.intervention.values.items():
             if not isinstance(val, list):
                 assert node not in multi_loc_nodes
-                interv_lists[node].append(val)
+                ivn_lists[node].append(val)
             else:
                 # multi-loc interventions
-                if node not in interv:
+                if node not in ivn_lists:
                     multi_loc_nodes.add(node)
-                    interv_lists[node] = [[] for _ in range(len(val))]
+                    ivn_lists[node] = [[] for _ in range(len(val))]
                 else:
                     assert node in multi_loc_nodes
-                assert len(val) == len(interv_lists[node])
+                assert len(val) == len(ivn_lists[node])
                 for i in range(len(val)):
-                    interv_lists[node][i].append(val[i])
+                    ivn_lists[node][i].append(val[i])
 
-        for node, loc in interv.location:
+        for node, loc in ivn.location.items():
             if node not in loc_dict:
-                loc_dict[node] = location.expand_dim(loc, batch_dim)
+                if node not in multi_loc_nodes:
+                    loc_dict[node] = location.expand_dim(loc, batch_dim)
+                else:
+                    assert isinstance(loc, list)
+                    loc_dict[node] = [location.expand_dim(l, batch_dim) for l in loc]
             else:
-                if location.expand_dim(loc) != loc_dict[node]:
-                    raise RuntimeError(f"Locs do not match in the sequence of interventions! "
+                if node not in multi_loc_nodes\
+                        and location.expand_dim(loc, batch_dim) != loc_dict[node]:
+                    raise RuntimeError(f"Locs are inconsistent in the list of interventions "
                                        f"(found both {loc} and {loc_dict[node]} for node {node})")
+                if node in multi_loc_nodes \
+                        and not all(location.expand_dim(l, batch_dim) == ll for l, ll in zip(loc, loc_dict[node])):
+                    raise RuntimeError(f"Locs are inconsistent in the list of multi_node interventions for node {node}!")
 
     # make sure base lists have equal length
     if not all(len(l) == batch_size for l in base_lists.values()):
@@ -417,8 +440,8 @@ def pack_interventions(
                 raise RuntimeError(f"List of values for leaf `{leaf}` has shorter length ({len(vals)}) than batch size ({batch_size})")
 
     # make sure intervention values have equal length
-    if not interv_is_empty:
-        for node, vals in interv_lists.items():
+    if not ivn_is_empty:
+        for node, vals in ivn_lists.items():
             if node not in multi_loc_nodes:
                 if len(vals) != batch_size:
                     raise RuntimeError(f"List of values for intervention at `{node}` has shorter length ({len(vals)}) than batch size ({batch_size})")
@@ -427,25 +450,38 @@ def pack_interventions(
                     raise RuntimeError(f"Lists of values for multi-location intervention have inconsistent length")
 
 
-    base_dict = batchify(base_lists, batch_dim, non_batch_inputs)
-    interv_dict = batchify(interv_lists, batch_dim) if not interv_is_empty else {}
+    base_dict = batchify(base_lists, batch_dim, multi_loc_nodes, non_batch_inputs)
+    ivn_dict = batchify(ivn_lists, batch_dim, multi_loc_nodes) if not ivn_is_empty else {}
 
-    return Intervention.batched(base_dict, interv_dict, loc_dict,
-                                cache_results=cache_results,
-                                cache_base_results=cache_base_results)
+    return base_dict, ivn_dict, loc_dict
 
-def batchify(input_lists, batch_dim, non_batch_inputs=None):
+
+def batchify(input_lists, batch_dim, multi_loc_nodes, non_batch_inputs=None):
+    """ Stack values into a tensor or array along a dimension """
     input_dict = {}
     for key, vals in input_lists.items():
-        one_val = vals[0]
-        if non_batch_inputs and key in non_batch_inputs:
-            input_dict[key] = one_val
-        elif utils.is_torch_tensor(one_val):
-            input_dict[key] = torch.stack(vals, dim=batch_dim)
-        elif utils.is_numpy_array(one_val):
-            input_dict[key] = np.stack(vals, axis=batch_dim)
+        if key in multi_loc_nodes:
+            input_dict[key] = []
+            for _vals in vals:
+                one_val = _vals[0]
+                if non_batch_inputs and key in non_batch_inputs:
+                    input_dict[key].append(one_val)
+                elif utils.is_torch_tensor(one_val):
+                    input_dict[key].append(torch.stack(_vals, dim=batch_dim))
+                elif utils.is_numpy_array(one_val):
+                    input_dict[key].append(np.stack(_vals, axis=batch_dim))
+                else:
+                    raise RuntimeError(f"Currently does not support automatically batchifying inputs with type {type(one_val)} for node `{key}`")
         else:
-            raise RuntimeError(f"Currently does not support automatically batchifying inputs with type {type(one_val)} for node `{key}`")
+            one_val = vals[0]
+            if non_batch_inputs and key in non_batch_inputs:
+                input_dict[key] = one_val
+            elif utils.is_torch_tensor(one_val):
+                input_dict[key] = torch.stack(vals, dim=batch_dim)
+            elif utils.is_numpy_array(one_val):
+                input_dict[key] = np.stack(vals, axis=batch_dim)
+            else:
+                raise RuntimeError(f"Currently does not support automatically batchifying inputs with type {type(one_val)} for node `{key}`")
     return input_dict
 
 

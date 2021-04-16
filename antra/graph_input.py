@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, Sequence
+from typing import *
 
 from .utils import serialize, serialize_batch, is_torch_tensor, is_numpy_array
 
@@ -14,7 +14,8 @@ class GraphInput:
 
     def __init__(self, values: Dict[str,Any], cache_results: bool=True,
                  batched: bool=False, batch_dim: int=0, keys: Sequence=None,
-                 key_leaves: Sequence[str]=None):
+                 key_leaves: Optional[Sequence[str]]=None,
+                 non_batch_leaves: Optional[Sequence[str]]=None):
         """
         :param values: A dict mapping from each leaf node name (str) to an input
             value for that node (Any)
@@ -25,22 +26,38 @@ class GraphInput:
             dimension for the batch
         :param keys: A unique key/hash value for each input value in the batch
         :param key_leaves: Specify a (sub)set of leaves whose values are used
-            to automatically calculate the key
+            to automatically calculate the key. key_leaves must not contain any
+            non_batch_leaves.
+        :param non_batch_leaves: Leaves that are not batched, i.e. leaves that
+            take in only one singleton value as input, even .
         """
         self._values = values
         self.cache_results=cache_results
         self.batched = batched
         self.batch_dim = batch_dim
+
+        if key_leaves is None and non_batch_leaves is not None:
+            key_leaves = set(values.keys()) - set(non_batch_leaves)
+
+        if key_leaves is not None or non_batch_leaves is not None:
+            _key_leaf_set = set(key_leaves) if key_leaves else set()
+            _non_batch_leaf_set = set(non_batch_leaves) if non_batch_leaves else set()
+            if len(set(key_leaves).intersection(set(non_batch_leaves))) > 0:
+                raise ValueError(f"The leaves {set(key_leaves).intersection(set(non_batch_leaves))} "
+                                 f"cannot be non_batched and key leaves at the same time!")
+
         self.key_leaves = key_leaves
+        self.non_batch_leaves = non_batch_leaves
 
         if batched and not keys:
             keys = serialize_batch(
-                {k: v for k, v in values.items() if k in key_leaves} if key_leaves else values,
-                dim=batch_dim
+                {k: v for k, v in values.items() if k in key_leaves}
+                if key_leaves else values, dim=batch_dim
             )
         if not batched and not keys:
             keys = serialize(
-                {k: v for k, v in values.items() if k in key_leaves} if key_leaves else values
+                {k: v for k, v in values.items() if k in key_leaves}
+                if key_leaves else values
             )
 
         self.keys = keys
@@ -57,10 +74,8 @@ class GraphInput:
         #         raise RuntimeError("Currently does not support input values on multiple devices")
 
     @classmethod
-    def batched(cls, values: Dict[str,Any], keys=None, cache_results: bool=True,
-                 batch_dim: int=0):
-        return cls(values, cache_results=cache_results, batched=True,
-                   batch_dim=batch_dim, keys=keys)
+    def batched(cls, values: Dict[str,Any], **kwargs):
+        return cls(values, batched=True, **kwargs)
 
     @property
     def values(self) -> Dict[str, Any]:

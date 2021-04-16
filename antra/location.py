@@ -1,6 +1,7 @@
 from typing import Union, Tuple
 
-LocationType = Union[int, slice, type(...), Tuple["LocationType", ...]]
+
+LocationType = Union[int, slice, type(...), Tuple['LocationType', ...]]
 SerializedLocationType = Union[int, str, Tuple["SerializedLocationType", ...]]
 
 class Location:
@@ -79,7 +80,7 @@ def deserialize_location(s: SerializedLocationType) -> LocationType:
         return tuple(deserialize_location(s))
 
 
-def reduce_dim(l: Tuple[LocationType, ...], dim=0) -> LocationType:
+def reduce_dim(l: Tuple[LocationType, ...], dim) -> LocationType:
     if not dim < len(l):
         raise ValueError(f"Cannot reduce {len(l)}-dim index at dim {dim} (must be < {len(l)})")
     return l[:dim] + l[dim+1:] if dim != -1 else l[:-1]
@@ -87,10 +88,10 @@ def reduce_dim(l: Tuple[LocationType, ...], dim=0) -> LocationType:
 
 _LOC = Location()
 
-def expand_dim(l: LocationType, dim=0) -> LocationType:
-    if not -len(l) - 1 <= dim <= len(l):
-        raise ValueError(f"Cannot expand {len(l)}-dim index at dim {dim} (must be <= {len(l)})")
+def expand_dim(l: LocationType, dim) -> LocationType:
     if not isinstance(l, tuple):
         l = (l,)
+    if not -len(l) - 1 <= dim <= len(l):
+        raise ValueError(f"Cannot expand {len(l)}-dim index at dim {dim} (must be <= {len(l)})")
     dim = dim % (len(l) + 1)
     return l[:dim] + (_LOC[:],) + l[dim:]
