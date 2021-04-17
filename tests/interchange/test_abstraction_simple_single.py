@@ -1,6 +1,5 @@
 from antra import ComputationGraph, GraphNode, Intervention, Location
 from antra.interchange.abstraction_single_old import find_abstractions
-import torch
 import numpy as np
 
 class BooleanLogicProgram(ComputationGraph):
@@ -23,13 +22,11 @@ class BooleanLogicProgram(ComputationGraph):
 
         @GraphNode(bool_leaf1,bool_leaf2)
         def bool_intermediate(x,y):
-            return x & y
-            # return np.array([float(bool(x[0]) and bool(y[0]))], dtype=np.float64)
+            return np.array([float(bool(x[0]) and bool(y[0]))], dtype=np.float64)
 
         @GraphNode(bool_intermediate, bool_leaf3, bool_leaf4)
-        def bool_root(w, v , z):
-            return w & v & z
-            # return np.array([float(bool(w[0]) and bool(z[0]) and bool(v[0]))], dtype=np.float64)
+        def bool_root(w,v , z):
+            return np.array([float(bool(w[0]) and bool(z[0]) and bool(v[0]))], dtype=np.float64)
 
         super().__init__(bool_root)
 
@@ -53,18 +50,15 @@ class BooleanLogicProgram2(ComputationGraph):
 
         @GraphNode(bool_leaf1,bool_leaf2)
         def bool_intermediate1(x,y):
-            return x & y
-            # return np.array([float(bool(x[0]) and bool(y[0]))], dtype=np.float64)
+            return np.array([float(bool(x[0]) and bool(y[0]))], dtype=np.float64)
 
         @GraphNode(bool_intermediate1,bool_leaf3)
         def bool_intermediate2(x,y):
-            return x & y
-            # return np.array([float(bool(x[0]) and bool(y[0]))], dtype=np.float64)
+            return np.array([float(bool(x[0]) and bool(y[0]))], dtype=np.float64)
 
         @GraphNode(bool_intermediate2, bool_leaf4)
         def bool_root(w, v):
-            return w & v
-            # return np.array([float(bool(w[0]) and bool(v[0]))], dtype=np.float64)
+            return np.array([float(bool(w[0]) and bool(v[0]))], dtype=np.float64)
 
         super().__init__(bool_root)
 

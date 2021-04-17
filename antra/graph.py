@@ -56,7 +56,6 @@ class ComputationGraph:
             if name not in self.nodes:
                 raise RuntimeError("Node in intervention experiment not found "
                                    "in computation graph: %s" % name)
-            # TODO: compare compatibility between shape of value and node
 
     def compute(self, inputs: GraphInput):
         """ Run forward pass through graph with a given set of inputs

@@ -10,7 +10,6 @@ from typing import Union, Callable, Dict, Any
 if importlib.util.find_spec("torch"):
     import antra.torch_utils as torch_utils
 
-# TODO: add type hints
 
 NodeName = str
 

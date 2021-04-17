@@ -1,8 +1,8 @@
 from typing import Union, Tuple
 
 
-LocationType = Union[int, slice, type(...), Tuple['LocationType', ...]]
-SerializedLocationType = Union[int, str, Tuple["SerializedLocationType", ...]]
+LocationType = Union[None, int, slice, type(...), Tuple['LocationType', ...]]
+SerializedLocationType = Union[None, int, str, Tuple["SerializedLocationType", ...]]
 
 class Location:
     """A helper class to manage parsing of indices and slices"""
@@ -11,6 +11,8 @@ class Location:
         self._loc = Location.process(loc) if loc else None
 
     def __getitem__(self, item):
+        if item is None:
+            return (None,)
         return item
 
     @staticmethod
@@ -60,7 +62,7 @@ def location_to_str(l: LocationType, add_brackets=False) -> str:
     return s
 
 def serialize_location(l: LocationType) -> SerializedLocationType:
-    if isinstance(l, int):
+    if isinstance(l, int) or l is None:
         return l
     elif isinstance(l, slice):
         return slice_to_str(l)
@@ -71,7 +73,7 @@ def serialize_location(l: LocationType) -> SerializedLocationType:
 
 
 def deserialize_location(s: SerializedLocationType) -> LocationType:
-    if isinstance(s, int):
+    if isinstance(s, int) or s is None:
         return s
     elif isinstance(s, str):
         if s == "...": return  Ellipsis
@@ -80,13 +82,22 @@ def deserialize_location(s: SerializedLocationType) -> LocationType:
         return tuple(deserialize_location(s))
 
 
-def reduce_dim(l: Tuple[LocationType, ...], dim) -> LocationType:
-    if not dim < len(l):
-        raise ValueError(f"Cannot reduce {len(l)}-dim index at dim {dim} (must be < {len(l)})")
-    return l[:dim] + l[dim+1:] if dim != -1 else l[:-1]
-
-
 _LOC = Location()
+full_slice = _LOC[:]
+
+# TODO: Test this
+def reduce_dim(l: LocationType, dim) -> LocationType:
+    if l is None or l is Ellipsis: return l
+    elif isinstance(l, int):
+        if dim == 0: raise ValueError(f"cannot reduce Location {location_to_str(l, add_brackets=True)} which is not full at dim 0")
+        else: return l
+    else: # l is tuple
+        if dim >= len(l) or l[dim] is Ellipsis: return l
+        if l[dim] != full_slice:
+            raise ValueError(f"cannot reduce Location {location_to_str(l, add_brackets=True)} which is not full at dim 0")
+        return l[:dim] + l[dim+1:] if dim != -1 else l[:-1]
+
+
 
 def expand_dim(l: LocationType, dim) -> LocationType:
     if not isinstance(l, tuple):
@@ -94,4 +105,4 @@ def expand_dim(l: LocationType, dim) -> LocationType:
     if not -len(l) - 1 <= dim <= len(l):
         raise ValueError(f"Cannot expand {len(l)}-dim index at dim {dim} (must be <= {len(l)})")
     dim = dim % (len(l) + 1)
-    return l[:dim] + (_LOC[:],) + l[dim:]
+    return l[:dim] + (full_slice,) + l[dim:]

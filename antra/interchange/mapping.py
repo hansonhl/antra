@@ -26,7 +26,7 @@ def get_indices(node: NodeName,
     if nodes_to_indices:
         indices = nodes_to_indices[node]
     else:
-        indices = [LOC[:]]
+        indices = [None]
         # length = None
         # for key in graph.nodes[node].base_cache:
         #     length = max(graph.nodes[node].base_cache[key].shape)
