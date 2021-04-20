@@ -24,7 +24,7 @@ def create_new_realizations(low_model, high_model, high_node, mapping, low_inter
             low_value = low_model.intervene_node(low_node, low_intervention)[1][mapping[high_node][low_node]] # index into location
         for child in high_model.nodes[high_node].children:
             fill_new_realizations(child.name, mapping, low_intervention, high_intervention)
-        if high_node in high_intervention.intervention.values or high_model.nodes[high_node] in high_model.leaves or high_node == high_model.root.name:
+        if high_node in high_intervention.intervention._values or high_model.nodes[high_node] in high_model.leaves or high_node == high_model.root.name:
             return # H: ignore intervened nodes, leaf nodes and root nodes
 
         # H: in first dry run without interv, low_value and high_value will be intermediate nodes
@@ -41,7 +41,7 @@ def create_new_realizations(low_model, high_model, high_node, mapping, low_inter
 
 def get_potential_realizations(new_realizations, total_realizations, high_node, high_model, new_high_intervention):
     partial_realizations = [dict()]
-    for high_node2 in new_high_intervention.intervention.values:
+    for high_node2 in new_high_intervention.intervention._values:
         high_value2 = serialize(get_value(high_model, high_node2, new_high_intervention))
         if high_model.nodes[high_node2] in high_model.leaves or high_node2 == high_model.root.name:
             continue # H: ignore leaves and root
@@ -81,7 +81,7 @@ def high_to_low(high_model, high_intervention,realization, mapping, input_mappin
     for high_node in high_model.leaves:
         for low_node in mapping[high_node.name]:
             base[low_node] = input_mapping(get_value(high_model, high_node.name, high_intervention))
-    for high_node in high_intervention.intervention.values:
+    for high_node in high_intervention.intervention._values:
         high_value = serialize(get_value(high_model, high_node, high_intervention))
         for low_node in mapping[high_node]:
             low_value = deserialize(realization[(high_node, high_value)])
@@ -124,7 +124,7 @@ def test_mapping(low_model,high_model,high_inputs,total_high_interventions,mappi
         used_high_interventions = set()
         for new_high_intervention in total_high_interventions:
             for high_node, high_value in new_realizations: # H: just one pair for now
-                if high_node in new_high_intervention.intervention.values and new_high_intervention not in used_high_interventions:
+                if high_node in new_high_intervention.intervention._values and new_high_intervention not in used_high_interventions:
                     # H: pick an intervention from total_high_interventions (there is only one intermediate high node so it's okay)
                     realizations = get_potential_realizations(new_realizations, total_realizations, high_node, high_model, new_high_intervention)
                     # H: realizations: (high_node, high_value) -> stringified_low_value

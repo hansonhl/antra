@@ -93,10 +93,10 @@ def test_abstraction_simple():
         for interventions in result:
             low_intervention, high_intervention = interventions
             print("mapping", mapping)
-            print("low:",low_intervention.intervention.values)
-            print("lowbase:",low_intervention.base.values)
-            print("high:", high_intervention.intervention.values)
-            print("highbase:", high_intervention.base.values)
+            print("low:", low_intervention.intervention._values)
+            print("lowbase:", low_intervention.base._values)
+            print("high:", high_intervention.intervention._values)
+            print("highbase:", high_intervention.base._values)
             print("success:",result[interventions])
             print("\n\n")
             if not result[interventions]:

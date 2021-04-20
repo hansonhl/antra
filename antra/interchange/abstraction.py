@@ -11,7 +11,7 @@ from typing import *
 from antra import *
 import antra.location as location
 import antra.utils as utils
-
+from antra.realization import Realization, SerializedRealization
 from antra.interchange.mapping import create_possible_mappings, AbstractionMapping
 # from antra.utils import serialize, is_serialized, idx_by_dim, SerializedType
 
@@ -20,8 +20,8 @@ from antra.interchange.mapping import create_possible_mappings, AbstractionMappi
 HighNodeName = NodeName
 LowNodeName = NodeName
 
-SerializedRealization=Tuple[Tuple[Tuple[LowNodeName, location.SerializedLocationType], SerializedType], ...]
-Realization = Dict[Tuple[LowNodeName, location.SerializedLocationType], Any]
+# SerializedRealization=Tuple[Tuple[Tuple[LowNodeName, location.SerializedLocationType], SerializedType], ...]
+# Realization = Dict[Tuple[LowNodeName, location.SerializedLocationType], Any]
 RealizationMapping = Dict[Tuple[HighNodeName, SerializedType], List[Realization]]
 RealizationRecord = Dict[Tuple[HighNodeName, SerializedType], Set[SerializedRealization]]
 
@@ -117,7 +117,7 @@ class CausalAbstraction:
             -> Dict[HighNodeName, Set[SerializedType]]:
         interv_range = defaultdict(set)
         for interv in high_interventions:
-            for high_node_name, val in interv.intervention.values.items():
+            for high_node_name, val in interv.intervention._values.items():
                 interv_range[high_node_name].add(utils.serialize(val))
         return interv_range
 
@@ -190,7 +190,7 @@ class CausalAbstraction:
 
                     realizations, num_new_realizations = \
                         self._create_new_realizations(
-                            icd, low_intervention, high_intervention,
+                            icd, high_intervention, low_intervention,
                             high_ivn_res, low_ivn_res, actual_batch_size)
 
                     total_new_realizations += num_new_realizations
@@ -203,7 +203,7 @@ class CausalAbstraction:
             print(new_realizations)
 
             if iteration == 0:
-                icd.ran_empty_interventions = True
+                icd.did_empty_interventions = True
             iteration += 1
             if total_new_realizations == 0:
                 break
@@ -230,7 +230,7 @@ class CausalAbstraction:
             results[key] = (_hi_res == _lo_res)
 
     def _create_new_realizations(self, icd: "InterchangeDataset",
-                                 high_ivn: Intervention, low_ivn: Intervention,
+                                 high_ivn_batch: Intervention, low_ivn_batch: Intervention,
                                  high_ivn_res: Dict[str, Any], low_ivn_res: Dict[str, Any],
                                  actual_batch_size: int) -> (RealizationMapping, int):
         rzn_mapping: RealizationMapping = defaultdict(list)
@@ -239,24 +239,33 @@ class CausalAbstraction:
         # print("--- Creating new rzns")
 
         # TODO: Keep track of where the interventions came from
+        trace_origins = self.result_format == "verbose"
+        if trace_origins:
+            origins = [self.low_keys_to_interventions[low_ivn_batch.keys[i]] \
+                       for i in range(actual_batch_size)]
 
         for high_node, high_values in high_ivn_res.items():
             if high_node not in self.high_intervention_range:
                 continue
-            if not high_ivn.is_empty() and high_node not in high_ivn.affected_nodes:
+            if not high_ivn_batch.is_empty() and high_node not in high_ivn_batch.affected_nodes:
                 continue
 
-            rzns = [{} for _ in range(actual_batch_size)]
+            rzns = [Realization() for _ in range(actual_batch_size)]
             # print("\nnum low mappings", len(self.curr_mapping[high_node]))
             for low_node, low_loc in self.curr_mapping[high_node].items():
                 ser_low_loc = location.serialize_location(
-                    location.reduce_dim(low_loc, low_ivn.batch_dim))
+                    location.reduce_dim(low_loc, low_ivn_batch.batch_dim))
                 low_values = low_ivn_res[low_node] if low_loc is None else low_ivn_res[low_node][low_loc]
+                key = (low_node, ser_low_loc)
                 # print(f"low_values, shape={low_values.shape}")
                 # print(low_values)
                 for i in range(actual_batch_size):
-                    rzns[i][(low_node, ser_low_loc)] = \
-                         utils.idx_by_dim(low_values, i, low_ivn.batch_dim)
+                    _low_val = utils.idx_by_dim(low_values, i, low_ivn_batch.batch_dim)
+                    if trace_origins:
+                        rzns[i].add(key, _low_val, origins[i])
+                    else:
+                        rzns[i][key] = _low_val
+
                     # pprint(rzns)
                     # print(f"{i} {rzns[i][(low_node, ser_low_loc)]}")
                         # utils.idx_by_dim(low_values, i, low_ivn.batch_dim)
@@ -265,7 +274,7 @@ class CausalAbstraction:
             # pprint(rzns)
 
             for i in range(actual_batch_size):
-                high_value = utils.idx_by_dim(high_values, i, high_ivn.batch_dim)
+                high_value = utils.idx_by_dim(high_values, i, high_ivn_batch.batch_dim)
                 ser_high_value = utils.serialize(high_value)
 
                 if not ser_high_value in self.high_intervention_range[high_node]:
@@ -273,7 +282,7 @@ class CausalAbstraction:
 
                 # before finally adding realization to the new realizations,
                 # check if we've seen it before
-                ser_rzn = serialize_realization(rzns[i])
+                ser_rzn = rzns[i].serialize()
                 if ser_rzn in record[(high_node, ser_high_value)]:
                     continue
 
@@ -295,7 +304,7 @@ class CausalAbstraction:
         # pprint(batch)
         high_node_to_minibatches = defaultdict(list)
         for d in batch:
-            high_nodes = tuple(sorted(d["high_intervention"].intervention.values.keys()))
+            high_nodes = tuple(sorted(d["high_intervention"].intervention._values.keys()))
             high_node_to_minibatches[high_nodes].append(d)
         # high_node_to_minibatches = dict(high_node_to_minibatches)
         # pprint(len(high_node_to_minibatches[tuple()]))
@@ -354,7 +363,7 @@ class InterchangeDataset(IterableDataset):
 
         self.mapping = mapping
         self.collate_fn = collate_fn
-        self.ran_empty_interventions = False
+        self.did_empty_interventions = False
         # self.populate_dataset()
 
     @property
@@ -375,22 +384,25 @@ class InterchangeDataset(IterableDataset):
         high_interv: GraphInput = high_intervention.intervention
         # low_base = self.high_keys_to_low_inputs[high_intervention.base.key]
 
-        all_realizations: List[Realization] = [{}]
+        # all_realizations: List[Realization] = [{}]
+        all_realizations: List[Realization] = [Realization()]
 
         for high_var_name, high_var_value in high_interv.values.items():
             ser_high_value = utils.serialize(high_var_value)
-            new_partial_intervs: List[Realization] = [{}]
-            for pi in all_realizations:
+            # new_partial_intervs: List[Realization] = [{}]
+            new_partial_intervs: List[Realization] = []
+            for rzn in all_realizations:
                 for realization in self.all_realizations[(high_var_name, ser_high_value)]:
                     # realization is Dict[(low node name, serialized location), value]
-                    pi_copy = copy.copy(pi)
-                    pi_copy.update(realization)
-                    new_partial_intervs.append(pi_copy)
+                    rzn_copy = copy.copy(rzn)
+                    rzn_copy.update(realization)
+                    new_partial_intervs.append(rzn_copy)
                 for realization in self.curr_realizations[(high_var_name, ser_high_value)]:
-                    pi_copy = copy.copy(pi)
-                    pi_copy.update(realization)
-                    pi_copy["accepted"] = True
-                    new_partial_intervs.append(pi_copy)
+                    rzn_copy = copy.copy(rzn)
+                    rzn_copy.update(realization)
+                    rzn_copy.accepted = True
+                    # pi_copy["accepted"] = True
+                    new_partial_intervs.append(rzn_copy)
 
             all_realizations = new_partial_intervs
 
@@ -410,24 +422,25 @@ class InterchangeDataset(IterableDataset):
             # pprint(all_realizations)
             # print("all_partial_intervs", all_realizations)
             low_interventions = []
-            for pi_dict in all_realizations:
-                if "accepted" not in pi_dict:
-                    continue
-                else:
-                    del pi_dict["accepted"]
-                    new_low_interv = self.get_intervention_from_realizations(low_base, pi_dict) # unbatched
-                    # print("** got new low interv")
-                    # print(new_low_interv)
-                    low_interventions.append(new_low_interv)
+            for rzn in all_realizations:
+                # if "accepted" not in rzn:
+                #     continue
+                # del rzn["accepted"]
+                if not rzn.accepted: continue
+                new_low_interv = Intervention.from_realization(low_base, rzn)
+                # new_low_interv = self.get_intervention_from_realization(low_base, rzn) # unbatched
+                # print("** got new low interv")
+                # print(new_low_interv)
+                low_interventions.append(new_low_interv)
 
             return low_interventions
 
-    def get_intervention_from_realizations(self, low_base: GraphInput, partial_interv_dict: Realization) -> Intervention:
+    def get_intervention_from_realization(self, low_base: GraphInput, rzn: Realization) -> Intervention:
         # partial_interv_dict may contain multiple entries with same node but different locations,
         # e.g {(nodeA, loc1): val, (nodeA, loc2): val}, need to find and merge them
         val_dict, loc_dict = defaultdict(list), defaultdict(list)
 
-        for (node_name, ser_low_loc), val in partial_interv_dict.items():
+        for (node_name, ser_low_loc), val in rzn.items():
             val_dict[node_name].append(val)
             low_loc = location.deserialize_location(ser_low_loc)
             loc_dict[node_name].append(low_loc)
@@ -441,45 +454,34 @@ class InterchangeDataset(IterableDataset):
                 else:
                     loc_dict[node_name] = loc_dict[node_name][0]
 
-        return Intervention(low_base, intervention=val_dict, location=loc_dict)
+        return Intervention(low_base, intervention=val_dict, location=loc_dict,
+                            realization=rzn)
 
 
     # TODO: Yield while getting the realizations
     def __iter__(self):
         for high_intervention in self.ca.high_interventions:
-            if self.ran_empty_interventions and high_intervention.is_empty():
+            if self.did_empty_interventions and high_intervention.is_empty():
                 continue
+            low_base = self.ca.high_keys_to_low_inputs[high_intervention.base.keys]
+            realizations = self._get_realizations(high_intervention)
+            for rzn in realizations:
+                if not rzn.is_empty() and not rzn.accepted: continue
 
-            low_interventions = self.get_low_interventions(high_intervention)
-            for low_intervention in low_interventions:
+                low_intervention = Intervention.from_realization(low_base, rzn)
+                # low_intervention = self.get_intervention_from_realization(low_base, rzn)
+
+                # store each intervention if necessary
                 if self.ca.result_format == "verbose":
+                    # print(f"added {low_intervention.keys=}")
                     self.ca.low_keys_to_interventions[low_intervention.keys] = low_intervention
+
                 yield {
                     "low_intervention": low_intervention,
                     "high_intervention": high_intervention,
                     # "high_output": None,
                     # "low_output": None
                 }
-
-            # low_base = self.ca.high_keys_to_low_inputs[high_intervention.base.keys]
-            # realizations = self._get_realizations(high_intervention)
-            # for r_dict in realizations:
-            #     if "accept" not in r_dict:
-            #         continue
-            #     else:
-            #         del r_dict["accept"]
-            #         low_intervention = self.get_intervention_from_realizations(low_base, r_dict)
-            #
-            #         # store each intervention if necessary
-            #         if self.ca.result_format == "verbose":
-            #             self.ca.low_keys_to_interventions[low_intervention.keys] = low_intervention
-            #
-            #         yield {
-            #             "low_intervention": low_intervention,
-            #             "high_intervention": high_intervention,
-            #             # "high_output": None,
-            #             # "low_output": None
-            #         }
 
     def get_dataloader(self, **kwargs):
         return DataLoader(self, collate_fn=self.collate_fn, **kwargs)
@@ -517,14 +519,14 @@ def pack_interventions(
     ivn_is_empty = False
 
     for ivn in interventions:
-        for leaf, val in ivn.base.values.items():
+        for leaf, val in ivn.base._values.items():
             base_lists[leaf].append(val)
 
         if ivn_is_empty and not ivn.is_empty():
             raise RuntimeError(f"Cannot pack empty interventions together with non-empty ones")
         if ivn.is_empty(): ivn_is_empty = True
 
-        for node, val in ivn.intervention.values.items():
+        for node, val in ivn.intervention._values.items():
             if not isinstance(val, list):
                 assert node not in multi_loc_nodes
                 ivn_lists[node].append(val)

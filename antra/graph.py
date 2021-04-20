@@ -52,7 +52,7 @@ class ComputationGraph:
         # if not intervention.intervention:
         #     raise RuntimeError("Must specify some kind of intervention!")
 
-        for name in intervention.intervention.values.keys():
+        for name in intervention.intervention._values.keys():
             if name not in self.nodes:
                 raise RuntimeError("Node in intervention experiment not found "
                                    "in computation graph: %s" % name)

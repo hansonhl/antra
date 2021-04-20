@@ -1,24 +1,32 @@
 import re
 import pprint
+from collections import defaultdict
 
-from .location import Location, location_to_str, LocationType
+from .location import Location, location_to_str, LocationType, deserialize_location
 from .graph_input import GraphInput
 from .utils import serialize, serialize_batch
+from .realization import Realization
 
 import logging
 
 logger = logging.getLogger(__name__)
 
-from typing import Dict, Union, Sequence
+from typing import *
 
 class Intervention:
     """ A hashable intervention object """
 
-    def __init__(self, base: Union[Dict, GraphInput],
-                 intervention: Union[Dict, GraphInput]=None,
-                 location: Dict=None,
-                 cache_results: bool=True, cache_base_results:bool=True,
-                 batched: bool=False, batch_dim: int=0):
+    def __init__(
+            self,
+            base: Union[Dict, GraphInput],
+            intervention: Union[Dict, GraphInput]=None,
+            location: Dict=None,
+            cache_results: bool=True,
+            cache_base_results:bool=True,
+            batched: bool=False,
+            batch_dim: int = 0,
+            realization: Optional[Realization] = None
+    ):
         """ Construct an intervention experiment.
 
         :param base: `GraphInput` or `dict(str->Any)` containing the "base"
@@ -38,6 +46,8 @@ class Intervention:
             inputs, i.e. the value of the dict must be a sequence.
         :param batch_dim: If inputs are batched and are pytorch tensors, the
             dimension for the batch
+        :param realization: Reference of the Realization object that contains
+            info about where the values of this intervention came from
         """
         intervention = {} if intervention is None else intervention
         location = {} if location is None else location
@@ -50,9 +60,38 @@ class Intervention:
         self.multi_loc_nodes = set()
         self.batched = batched
         self.batch_dim = batch_dim
+        self.realization = realization
 
         self._setup(base, intervention, location)
 
+    @classmethod
+    def from_realization(
+            cls,
+            base: Union[Dict, GraphInput],
+            realization: Realization,
+            cache_results: bool=True,
+            cache_base_results: bool=True
+        ):
+        ivn_dict, loc_dict = defaultdict(list), defaultdict(list)
+
+        for (node_name, ser_low_loc), val in realization.items():
+            ivn_dict[node_name].append(val)
+            low_loc = deserialize_location(ser_low_loc)
+            loc_dict[node_name].append(low_loc)
+
+        for node_name in ivn_dict.keys():
+            if len(ivn_dict[node_name]) == 1:
+                ivn_dict[node_name] = ivn_dict[node_name][0]
+            if len(loc_dict[node_name]) == 1:
+                if loc_dict[node_name][0] is None:
+                    del loc_dict[node_name]
+                else:
+                    loc_dict[node_name] = loc_dict[node_name][0]
+
+        ivn_dict = dict(ivn_dict)
+        loc_dict = dict(loc_dict)
+        return cls(base, intervention=ivn_dict, location=loc_dict, batched=False,
+                   cache_results=cache_results, cache_base_results=cache_base_results)
 
     @classmethod
     def batched(cls, base: Union[Dict, GraphInput],
@@ -191,16 +230,16 @@ class Intervention:
         assert isinstance(self.base, GraphInput)
         assert isinstance(self.intervention, GraphInput)
 
+        if self.intervention.is_empty():
+            return self.base.keys
+
         if not self.batched:
             return (self.base.keys, self.intervention.keys)
         else:
-            if self.intervention.is_empty():
-                return self.base.keys
-            else:
-                base_key, interv_key = self.base.keys, self.intervention.keys
-                if len(base_key) != len(interv_key):
-                    raise RuntimeError("Must provide the same number of inputs in batch for base and intervention")
-                return [(b, i) for b, i in zip(self.base.keys, self.intervention.keys)]
+            base_key, interv_key = self.base.keys, self.intervention.keys
+            if len(base_key) != len(interv_key):
+                raise RuntimeError("Must provide the same number of inputs in batch for base and intervention")
+            return [(b, i) for b, i in zip(self.base.keys, self.intervention.keys)]
 
     @property
     def base(self):
