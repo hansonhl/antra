@@ -42,7 +42,7 @@ class GraphInput:
         if key_leaves is not None or non_batch_leaves is not None:
             _key_leaf_set = set(key_leaves) if key_leaves else set()
             _non_batch_leaf_set = set(non_batch_leaves) if non_batch_leaves else set()
-            if len(set(key_leaves).intersection(set(non_batch_leaves))) > 0:
+            if len(_key_leaf_set.intersection(_non_batch_leaf_set)) > 0:
                 raise ValueError(f"The leaves {set(key_leaves).intersection(set(non_batch_leaves))} "
                                  f"cannot be non_batched and key leaves at the same time!")
 

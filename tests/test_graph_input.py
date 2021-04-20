@@ -11,7 +11,7 @@ def test_to_cuda():
     device = torch.device("cuda")
     i = i.to(device)
 
-    assert all(t.is_cuda for t in i.values.values())
+    assert all(t.is_cuda for t in i._values.values())
 
 
 def test_immutability():
