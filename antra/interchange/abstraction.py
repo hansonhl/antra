@@ -143,6 +143,7 @@ class CausalAbstraction:
 
     def test_mapping(self, mapping: AbstractionMapping):
         self.curr_mapping: AbstractionMapping = mapping
+
         icd = InterchangeDataset(mapping, self, collate_fn=self.collate_fn)
         icd_dataloader = icd.get_dataloader(batch_size=self.batch_size, shuffle=False)
 
@@ -164,13 +165,20 @@ class CausalAbstraction:
                     low_intervention = minibatch["low_intervention"]
                     high_intervention = minibatch["high_intervention"]
 
+                    # print("****** Inspect minibatch ******")
+                    # pprint(low_intervention)
+                    # pprint(high_intervention)
+
+
                     actual_batch_size = low_intervention.get_batch_size()
                     num_interventions += actual_batch_size
 
                     high_base_res, high_ivn_res = self.high_model.intervene_all_nodes(high_intervention)
                     low_base_res, low_ivn_res = self.low_model.intervene_all_nodes(low_intervention)
-
-                    if not high_intervention.is_empty:
+                    # print(f"{high_ivn_res['node']=}")
+                    # print(f"{low_ivn_res['node1']=}")
+                    # print("low_ivn_res", low_ivn_res)
+                    if not high_intervention.is_empty():
                         if self.result_format == "verbose":
                             self._add_verbose_results(
                                 results, high_intervention, low_intervention,
@@ -187,18 +195,22 @@ class CausalAbstraction:
 
                     total_new_realizations += num_new_realizations
                     merge_realization_mappings(new_realizations, realizations)
-            print("total_new_realizations", total_new_realizations)
-            print("number of interventiosn run", num_interventions)
-            # print("new_realizations")
-            # print(new_realizations)
+
+                    # if iteration == 1 and not high_intervention.is_empty(): return None
+            # print("total_new_realizations", total_new_realizations)
+            print("number of interventions run", num_interventions)
+            print("new_realizations")
+            print(new_realizations)
+
+            if iteration == 0:
+                icd.ran_empty_interventions = True
             iteration += 1
             if total_new_realizations == 0:
                 break
             else:
                 icd.update_realizations(new_realizations)
-
-                print("all realizations")
-                print(icd.all_realizations)
+                # print("all realizations")
+                # print(icd.all_realizations)
 
         return results
 
@@ -224,6 +236,7 @@ class CausalAbstraction:
         rzn_mapping: RealizationMapping = defaultdict(list)
         record: RealizationRecord = icd.realization_record
         new_rzn_count = 0
+        # print("--- Creating new rzns")
 
         # TODO: Keep track of where the interventions came from
 
@@ -233,15 +246,23 @@ class CausalAbstraction:
             if not high_ivn.is_empty() and high_node not in high_ivn.affected_nodes:
                 continue
 
-            rzns = [{}] * actual_batch_size
+            rzns = [{} for _ in range(actual_batch_size)]
+            # print("\nnum low mappings", len(self.curr_mapping[high_node]))
             for low_node, low_loc in self.curr_mapping[high_node].items():
                 ser_low_loc = location.serialize_location(
                     location.reduce_dim(low_loc, low_ivn.batch_dim))
-                low_values = low_ivn_res[low_node] if low_loc is None else \
-                    low_ivn_res[low_node][low_loc]
+                low_values = low_ivn_res[low_node] if low_loc is None else low_ivn_res[low_node][low_loc]
+                # print(f"low_values, shape={low_values.shape}")
+                # print(low_values)
                 for i in range(actual_batch_size):
                     rzns[i][(low_node, ser_low_loc)] = \
-                        utils.idx_by_dim(low_values, i, low_ivn.batch_dim)
+                         utils.idx_by_dim(low_values, i, low_ivn.batch_dim)
+                    # pprint(rzns)
+                    # print(f"{i} {rzns[i][(low_node, ser_low_loc)]}")
+                        # utils.idx_by_dim(low_values, i, low_ivn.batch_dim)
+            # print(f"low_values, {low_values}")
+            # print("rzns")
+            # pprint(rzns)
 
             for i in range(actual_batch_size):
                 high_value = utils.idx_by_dim(high_values, i, high_ivn.batch_dim)
@@ -270,10 +291,16 @@ class CausalAbstraction:
         """
         # package up a list of individual interventions into multiple batched interventions
         # batch may contain interventions on different locations
+        # pprint("******* Collating batch")
+        # pprint(batch)
         high_node_to_minibatches = defaultdict(list)
         for d in batch:
             high_nodes = tuple(sorted(d["high_intervention"].intervention.values.keys()))
             high_node_to_minibatches[high_nodes].append(d)
+        # high_node_to_minibatches = dict(high_node_to_minibatches)
+        # pprint(len(high_node_to_minibatches[tuple()]))
+        # pprint(high_node_to_minibatches)
+        # pprint(len(high_node_to_minibatches[('node',)]))
         minibatches = []
         for minibatch_dicts in high_node_to_minibatches.values():
             low_base_dict, low_ivn_dict, low_loc_dict = pack_interventions(
@@ -327,6 +354,7 @@ class InterchangeDataset(IterableDataset):
 
         self.mapping = mapping
         self.collate_fn = collate_fn
+        self.ran_empty_interventions = False
         # self.populate_dataset()
 
     @property
@@ -334,7 +362,7 @@ class InterchangeDataset(IterableDataset):
         return len(self.low_outputs)
 
     def update_realizations(self, new_realizations):
-        merge_realization_mappings(self.all_realizations, new_realizations)
+        merge_realization_mappings(self.all_realizations, self.curr_realizations)
         self.curr_realizations = new_realizations
 
     # def populate_dataset(self):
@@ -374,16 +402,22 @@ class InterchangeDataset(IterableDataset):
         if high_intervention.is_empty():
             return [Intervention(low_base, {})]
         else:
+            # print("=============Getting rlzns for high intervention=============")
+            # print(high_intervention)
+            # print("-------------Low intervs------------")
             all_realizations = self._get_realizations(high_intervention)
-
+            # print("all rzns")
+            # pprint(all_realizations)
             # print("all_partial_intervs", all_realizations)
             low_interventions = []
             for pi_dict in all_realizations:
-                if "accept" not in pi_dict:
+                if "accepted" not in pi_dict:
                     continue
                 else:
-                    del pi_dict["accept"]
+                    del pi_dict["accepted"]
                     new_low_interv = self.get_intervention_from_realizations(low_base, pi_dict) # unbatched
+                    # print("** got new low interv")
+                    # print(new_low_interv)
                     low_interventions.append(new_low_interv)
 
             return low_interventions
@@ -391,7 +425,7 @@ class InterchangeDataset(IterableDataset):
     def get_intervention_from_realizations(self, low_base: GraphInput, partial_interv_dict: Realization) -> Intervention:
         # partial_interv_dict may contain multiple entries with same node but different locations,
         # e.g {(nodeA, loc1): val, (nodeA, loc2): val}, need to find and merge them
-        val_dict, loc_dict = defaultdict(list)
+        val_dict, loc_dict = defaultdict(list), defaultdict(list)
 
         for (node_name, ser_low_loc), val in partial_interv_dict.items():
             val_dict[node_name].append(val)
@@ -413,8 +447,10 @@ class InterchangeDataset(IterableDataset):
     # TODO: Yield while getting the realizations
     def __iter__(self):
         for high_intervention in self.ca.high_interventions:
+            if self.ran_empty_interventions and high_intervention.is_empty():
+                continue
+
             low_interventions = self.get_low_interventions(high_intervention)
-            # print(low_interventions)
             for low_intervention in low_interventions:
                 if self.ca.result_format == "verbose":
                     self.ca.low_keys_to_interventions[low_intervention.keys] = low_intervention

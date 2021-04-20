@@ -1,4 +1,5 @@
 import re
+import pprint
 
 from .location import Location, location_to_str, LocationType
 from .graph_input import GraphInput
@@ -299,3 +300,11 @@ class Intervention:
                             cache_base_results=self.cache_base_results,
                             batched=self.batched,
                             batch_dim=self.batch_dim)
+
+    def __repr__(self):
+        repr_dict = {
+            "base": self.base.keys,
+            "interv": self.intervention.keys,
+            "locs": self.location
+        }
+        return pprint.pformat(repr_dict, indent=1, compact=True)

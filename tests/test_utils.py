@@ -2,7 +2,7 @@ import pytest
 import torch
 import numpy as np
 
-from antra.utils import serialize, serialize_batch
+from antra.utils import serialize, serialize_batch, idx_by_dim
 from antra.torch_utils import deserialize
 
 dataset = [torch.tensor(1.),
@@ -98,3 +98,23 @@ def test_serialize_numpy_batch_dim1(x, y):
     for i, ex in enumerate(res):
         assert np.allclose(np.array(ex[0][1]), input1[:,i])
         assert np.allclose(np.array(ex[1][1]), input2[:,i,:])
+
+t1 = torch.tensor([[3],[4],[5],[6]])
+t2 = torch.tensor([1, 2, 3, 4])
+t3 = torch.tensor([[0., 1.,], [10., 11.,], [20., 21.], [30., 31.]])
+t4 = torch.stack((torch.zeros(3,3), torch.ones(3,3), 2 * torch.ones(3,3)), dim=0)
+
+dataset = [
+    (t1, 1, torch.tensor([4])),
+    (t1, 3, torch.tensor([6])),
+    (t2, 2, torch.tensor(3)),
+    (t3, 0, torch.tensor([0., 1.])),
+    (t3, 2, torch.tensor([20., 21.])),
+    (t4, 1, torch.ones(3,3))
+]
+
+@pytest.mark.parametrize("x, idx, expected", dataset)
+def test_idx_by_dim_0(x, idx, expected):
+    got = idx_by_dim(x, idx, 0)
+    assert got.shape == expected.shape
+    assert torch.allclose(got, expected)
