@@ -24,7 +24,7 @@ def get_nodes_and_dependencies(graph: ComputationGraph):
 def get_indices(node: NodeName,
                 nodes_to_indices: Dict[NodeName, List[LocationType]]):
     if nodes_to_indices:
-        indices = nodes_to_indices[node]
+        indices = nodes_to_indices.get(node, [None])
     else:
         indices = [None]
         # length = None

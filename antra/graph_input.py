@@ -1,5 +1,6 @@
 import logging
 from typing import *
+import pprint
 
 from .utils import serialize, serialize_batch, is_torch_tensor, is_numpy_array
 
@@ -97,11 +98,10 @@ class GraphInput:
 
     def __repr__(self):
         if self.values is None:
-            return "GraphInput{}"
+            return "GraphInput()"
         else:
-            s = ", ".join(
-                ("'%s': %s" % (k, type(v))) for k, v in self.values.items())
-            return "GraphInput{%s}" % s
+            s = pprint.pformat(self.values, indent=1, compact=True)
+            return f"GraphInput({s})"
 
     def is_empty(self):
         return not self._values

@@ -53,6 +53,8 @@ def location_to_str(l: LocationType, add_brackets=False) -> str:
         s = slice_to_str(l)
     elif l is Ellipsis:
         s = "..."
+    elif l is None:
+        s = "None"
     elif isinstance(l, tuple):
         s = ",".join(location_to_str(s) for s in l)
     else:
@@ -79,7 +81,7 @@ def deserialize_location(s: SerializedLocationType) -> LocationType:
         if s == "...": return  Ellipsis
         else: return str_to_slice(s)
     if isinstance(s, tuple):
-        return tuple(deserialize_location(s))
+        return tuple(deserialize_location(x) for x in s)
 
 
 _LOC = Location()

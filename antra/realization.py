@@ -1,4 +1,5 @@
 from typing import *
+import pprint
 
 import antra.utils as utils
 from antra.utils import SerializedType
@@ -9,9 +10,9 @@ RealizationKey = Tuple[str, SerializedLocationType]
 Intervention = "antra.intervention.Intervention"
 
 class Realization:
-    """ An object that is a 'duck typing' of a dict that maps node names and
-    locations to values. Also optionally keeps a reference to an Intervention that
-    produced that value. """
+    """ 'duck typing' of a dict that maps node names and locations to values.
+    It optionally keeps a reference to an Intervention that produced that value.
+    """
     def __init__(self):
         self._data: Dict[RealizationKey, Any] = {}
         self._origins: Dict[RealizationKey, Intervention] = {}
@@ -71,3 +72,4 @@ class Realization:
             "data": self.data,
             "origins": self.origins
         }
+        return pprint.pformat(repr_dict, indent=1, compact=True)

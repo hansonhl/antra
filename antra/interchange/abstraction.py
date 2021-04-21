@@ -79,7 +79,8 @@ class CausalAbstraction:
 
         self.mappings = create_possible_mappings(
             low_model, high_model, fixed_node_mapping, ignored_low_nodes,
-            low_nodes_to_indices)
+            low_nodes_to_indices
+        )
 
         self.low_keys_to_inputs = {gi.keys: gi for gi in low_inputs}
         self.high_keys_to_inputs = {gi.keys: gi for gi in high_inputs}
@@ -151,7 +152,7 @@ class CausalAbstraction:
         results = {}
         iteration = 0
         while True:
-            print(f"======== iteration {iteration} ========")
+            # print(f"======== iteration {iteration} ========")
             new_realizations: RealizationMapping = {}
             total_new_realizations = 0
             num_interventions = 0
@@ -198,9 +199,9 @@ class CausalAbstraction:
 
                     # if iteration == 1 and not high_intervention.is_empty(): return None
             # print("total_new_realizations", total_new_realizations)
-            print("number of interventions run", num_interventions)
-            print("new_realizations")
-            print(new_realizations)
+            # print("number of interventions run", num_interventions)
+            # print("new_realizations")
+            # print(new_realizations)
 
             if iteration == 0:
                 icd.did_empty_interventions = True
@@ -253,8 +254,9 @@ class CausalAbstraction:
             rzns = [Realization() for _ in range(actual_batch_size)]
             # print("\nnum low mappings", len(self.curr_mapping[high_node]))
             for low_node, low_loc in self.curr_mapping[high_node].items():
-                ser_low_loc = location.serialize_location(
-                    location.reduce_dim(low_loc, low_ivn_batch.batch_dim))
+                ser_low_loc = location.serialize_location(low_loc)
+                # ser_low_loc = location.serialize_location(
+                #     location.reduce_dim(low_loc, low_ivn_batch.batch_dim))
                 low_values = low_ivn_res[low_node] if low_loc is None else low_ivn_res[low_node][low_loc]
                 key = (low_node, ser_low_loc)
                 # print(f"low_values, shape={low_values.shape}")
@@ -543,19 +545,21 @@ def pack_interventions(
 
         for node, loc in ivn.location.items():
             if node not in loc_dict:
-                if node not in multi_loc_nodes:
-                    loc_dict[node] = location.expand_dim(loc, batch_dim)
-                else:
-                    assert isinstance(loc, list)
-                    loc_dict[node] = [location.expand_dim(l, batch_dim) for l in loc]
+                loc_dict[node] = loc
+                # if node not in multi_loc_nodes:
+                #     loc_dict[node] = location.expand_dim(loc, batch_dim)
+                # else:
+                #     assert isinstance(loc, list)
+                #     loc_dict[node] = [location.expand_dim(l, batch_dim) for l in loc]
             else:
-                if node not in multi_loc_nodes\
-                        and location.expand_dim(loc, batch_dim) != loc_dict[node]:
+                # if node not in multi_loc_nodes and location.expand_dim(loc, batch_dim) != loc_dict[node]:
+                if node not in multi_loc_nodes and loc != loc_dict[node]:
                     raise RuntimeError(f"Locs are inconsistent in the list of interventions "
                                        f"(found both {loc} and {loc_dict[node]} for node {node})")
-                if node in multi_loc_nodes \
-                        and not all(location.expand_dim(l, batch_dim) == ll for l, ll in zip(loc, loc_dict[node])):
-                    raise RuntimeError(f"Locs are inconsistent in the list of multi_node interventions for node {node}!")
+                # if node in multi_loc_nodes and not all(location.expand_dim(l, batch_dim) == ll for l, ll in zip(loc, loc_dict[node])):
+                if node in multi_loc_nodes and not all(l == ll for l, ll in zip(loc, loc_dict[node])):
+                    raise RuntimeError(f"Locs are inconsistent in the list of "
+                                       f"multi_node interventions for node {node}!")
 
     # make sure base lists have equal length
     if not all(len(l) == batch_size for l in base_lists.values()):
