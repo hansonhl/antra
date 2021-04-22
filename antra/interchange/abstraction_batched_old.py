@@ -1,4 +1,4 @@
-# This script is the same as `causal_abstraction/interchange.py`.
+# This script is the same as `causal_abstraction/batched.py`.
 # It is duplicated here to support old pickled experiment result files.
 
 import torch

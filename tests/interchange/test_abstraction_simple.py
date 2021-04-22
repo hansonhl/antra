@@ -1,6 +1,6 @@
 from antra import *
 # from antra.interchange.abstraction_single_old import find_abstractions
-from antra.interchange.abstraction import CausalAbstraction
+from antra.interchange.batched import BatchedInterchange
 import torch
 from pprint import pprint
 from itertools import product
@@ -108,7 +108,7 @@ def test_abstraction_simple():
 
     fixed_node_mapping =  {x: {x: None} for x in ["root", "leaf1",  "leaf2", "leaf3", "leaf4"]}
 
-    ca = CausalAbstraction(
+    ca = BatchedInterchange(
         low_model=low_model,
         high_model=high_model,
         low_inputs=inputs,

@@ -26,7 +26,7 @@ RealizationMapping = Dict[Tuple[HighNodeName, SerializedType], List[Realization]
 RealizationRecord = Dict[Tuple[HighNodeName, SerializedType], Set[SerializedRealization]]
 
 
-class CausalAbstraction:
+class BatchedInterchange:
     def __init__(
             self,
             low_model: ComputationGraph,
@@ -352,7 +352,7 @@ class CausalAbstraction:
 
 
 class InterchangeDataset(IterableDataset):
-    def __init__(self, mapping: AbstractionMapping, ca: CausalAbstraction,
+    def __init__(self, mapping: AbstractionMapping, ca: BatchedInterchange,
                  collate_fn: Callable):
         super(InterchangeDataset, self).__init__()
         self.ca = ca

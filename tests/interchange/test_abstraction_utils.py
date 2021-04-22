@@ -2,7 +2,7 @@ import pytest
 
 import torch
 from antra import *
-import antra.interchange.abstraction as abstraction
+import antra.interchange.batched as batched
 
 
 def test_pack_interventions_dim0_basic():
@@ -10,18 +10,18 @@ def test_pack_interventions_dim0_basic():
     ivns = [
         Intervention({"a": torch.tensor([1,2,3,4,5]), "b": torch.tensor([5,6,7])},
                      {"c": torch.tensor([3,4])},
-                     {"c": LOC[1:3]}),
+                     {"c": LOC[:,1:3]}),
         Intervention({"a": torch.tensor([1,2,3,4,5]), "b": torch.tensor([5,6,7])},
                      {"c": torch.tensor([3,4])},
-                     {"c": LOC[1:3]}),
+                     {"c": LOC[:,1:3]}),
         Intervention({"a": torch.tensor([11,2,3,4,5]), "b": torch.tensor([5,6,7])},
                      {"c": torch.tensor([2,3])},
-                     {"c": LOC[1:3]}),
+                     {"c": LOC[:,1:3]}),
         Intervention({"a": torch.tensor([11,2,3,4,5]), "b": torch.tensor([5,6,7])},
                      {"c": torch.tensor([2,3])},
-                     {"c": LOC[1:3]}),
+                     {"c": LOC[:,1:3]}),
     ]
-    base_dict, interv_dict, loc_dict = abstraction.pack_interventions(
+    base_dict, interv_dict, loc_dict = batched.pack_interventions(
         ivns, batch_dim=batch_dim
     )
     batch_ivn = Intervention.batched(base_dict, interv_dict, loc_dict, batch_dim=batch_dim)
@@ -47,7 +47,7 @@ def test_pack_interventions_dim0_no_loc():
                      {"c": torch.tensor([2,3])})
     ]
 
-    base_dict, interv_dict, loc_dict = abstraction.pack_interventions(
+    base_dict, interv_dict, loc_dict = batched.pack_interventions(
         ivns, batch_dim=batch_dim
     )
     batch_ivn = Intervention.batched(base_dict, interv_dict, loc_dict, batch_dim=batch_dim)
@@ -66,18 +66,18 @@ def test_pack_interventions_dim1_basic():
     ivns = [
         Intervention({"a": torch.tensor([1,2,3,4,5]), "b": torch.tensor([5,6,7])},
                      {"c": torch.tensor([3,4])},
-                     {"c": LOC[1:3]}),
+                     {"c": LOC[1:3,:]}),
         Intervention({"a": torch.tensor([1,2,3,4,5]), "b": torch.tensor([5,6,7])},
                      {"c": torch.tensor([3,4])},
-                     {"c": LOC[1:3]}),
+                     {"c": LOC[1:3,:]}),
         Intervention({"a": torch.tensor([11,2,3,4,5]), "b": torch.tensor([5,6,7])},
                      {"c": torch.tensor([2,3])},
-                     {"c": LOC[1:3]}),
+                     {"c": LOC[1:3,:]}),
         Intervention({"a": torch.tensor([11,2,3,4,5]), "b": torch.tensor([5,6,7])},
                      {"c": torch.tensor([2,3])},
-                     {"c": LOC[1:3]}),
+                     {"c": LOC[1:3,:]}),
     ]
-    base_dict, interv_dict, loc_dict = abstraction.pack_interventions(
+    base_dict, interv_dict, loc_dict = batched.pack_interventions(
         ivns, batch_dim=batch_dim
     )
     batch_ivn = Intervention.batched(base_dict, interv_dict, loc_dict, batch_dim=batch_dim)
@@ -99,18 +99,18 @@ def test_pack_interventions_dim0_multi_loc():
     ivns = [
         Intervention({"a": torch.tensor([1,2,3,4,5]), "b": torch.tensor([5,6,7])},
                      {"c": [torch.tensor([3,4]), torch.tensor([6])]},
-                     {"c": [LOC[1:3], LOC[5]]}),
+                     {"c": [LOC[:,1:3], LOC[:,5]]}),
         Intervention({"a": torch.tensor([1,2,3,4,5]), "b": torch.tensor([5,6,7])},
                      {"c": [torch.tensor([3,4]), torch.tensor([6])]},
-                     {"c": [LOC[1:3], LOC[5]]}),
+                     {"c": [LOC[:,1:3], LOC[:,5]]}),
         Intervention({"a": torch.tensor([11,2,3,4,5]), "b": torch.tensor([5,6,7])},
                      {"c": [torch.tensor([2,3]), torch.tensor([5])]},
-                     {"c": [LOC[1:3], LOC[5]]}),
+                     {"c": [LOC[:,1:3], LOC[:,5]]}),
         Intervention({"a": torch.tensor([11,2,3,4,5]), "b": torch.tensor([5,6,7])},
                      {"c": [torch.tensor([2,3]), torch.tensor([5])]},
-                     {"c": [LOC[1:3], LOC[5]]}),
+                     {"c": [LOC[:,1:3], LOC[:,5]]}),
     ]
-    base_dict, interv_dict, loc_dict = abstraction.pack_interventions(
+    base_dict, interv_dict, loc_dict = batched.pack_interventions(
         ivns, batch_dim=batch_dim
     )
     batch_ivn = Intervention.batched(base_dict, interv_dict, loc_dict, batch_dim=batch_dim)
@@ -140,9 +140,9 @@ def test_pack_interventions_dim0_multi_dim():
     ivns = [
         Intervention({"a": a_tensor[i], "b": b_tensor[i]},
                      {"c": c_tensor[i]},
-                     {"c": LOC[:2, 4:7]}) for i in range(4)
+                     {"c": LOC[:, :2, 4:7]}) for i in range(4)
     ]
-    base_dict, interv_dict, loc_dict = abstraction.pack_interventions(
+    base_dict, interv_dict, loc_dict = batched.pack_interventions(
         ivns, batch_dim=batch_dim
     )
     batch_ivn = Intervention.batched(base_dict, interv_dict, loc_dict, batch_dim=batch_dim)
@@ -164,9 +164,9 @@ def test_pack_interventions_dim1_multi_dim():
     ivns = [
         Intervention({"a": a_tensor[i], "b": b_tensor[i]},
                      {"c": c_tensor[i]},
-                     {"c": LOC[:2, 4:7]}) for i in range(4)
+                     {"c": LOC[:2,:, 4:7]}) for i in range(4)
     ]
-    base_dict, interv_dict, loc_dict = abstraction.pack_interventions(
+    base_dict, interv_dict, loc_dict = batched.pack_interventions(
         ivns, batch_dim=batch_dim
     )
     batch_ivn = Intervention.batched(base_dict, interv_dict, loc_dict, batch_dim=batch_dim)
@@ -190,10 +190,10 @@ def test_pack_interventions_dim0_with_non_batch():
     ivns = [
         Intervention({"a": a_tensor[i], "b": b_tensor[i], "x": None, "y": True},
                      {"c": c_tensor[i]},
-                     {"c": LOC[:2, 4:7]}) for i in range(4)
+                     {"c": LOC[:,:2, 4:7]}) for i in range(4)
     ]
     non_batch_leaves = ["x", "y"]
-    base_dict, interv_dict, loc_dict = abstraction.pack_interventions(
+    base_dict, interv_dict, loc_dict = batched.pack_interventions(
         ivns, batch_dim=batch_dim, non_batch_inputs=non_batch_leaves
     )
 

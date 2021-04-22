@@ -2,7 +2,7 @@ from itertools import product
 from pprint import pprint
 
 from antra import *
-from antra.interchange.abstraction import CausalAbstraction
+from antra.interchange import BatchedInterchange
 from antra.location import location_to_str, reduce_dim
 
 import torch
@@ -190,7 +190,7 @@ def test_mapping_generation():
         "hidden1": [LOC[:,0] , LOC[:, 1], LOC[:, 2], LOC[:,:1], LOC[:,1:], None]
     }
 
-    ca = CausalAbstraction(
+    ca = BatchedInterchange(
         low_model=low_model,
         high_model=high_model,
         low_inputs=low_inputs,
@@ -251,7 +251,7 @@ def test_abstraction_medium():
 
     # TODO: disjoint location [LOC[:,0], LOC[:,2]]
 
-    ca = CausalAbstraction(
+    ca = BatchedInterchange(
         low_model=low_model,
         high_model=high_model,
         low_inputs=low_inputs,
@@ -379,7 +379,7 @@ def test_abstraction_medium_multi_loc():
 
     # TODO: disjoint location [LOC[:,0], LOC[:,2]]
 
-    ca = CausalAbstraction(
+    ca = BatchedInterchange(
         low_model=low_model,
         high_model=high_model,
         low_inputs=low_inputs,
