@@ -241,6 +241,7 @@ def test_abstraction_medium():
         "hidden2": [None],
         "hidden1": [LOC[:,0] , LOC[:, 1], LOC[:, 2], LOC[:,:2], LOC[:,1:], LOC[:, :]]
     }
+    # TODO: disjoint location [LOC[:,0], LOC[:,2]]
     
     ca = CausalAbstraction(
         low_model=low_model,
