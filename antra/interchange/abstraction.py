@@ -86,7 +86,7 @@ class CausalAbstraction:
         self.high_keys_to_inputs = {gi.keys: gi for gi in high_inputs}
         if not high_to_low_keys:
             assert len(low_inputs) == len(high_inputs)
-            high_to_low_keys = {hi.keys : lo.keys for hi, lo in zip(low_inputs, high_inputs)}
+            high_to_low_keys = {hi.keys : lo.keys for lo, hi in zip(low_inputs, high_inputs)}
         self.high_to_low_input_keys = high_to_low_keys
         self.high_keys_to_low_inputs = {hi_key: self.low_keys_to_inputs[lo_key]
                                         for hi_key, lo_key in high_to_low_keys.items()}
@@ -343,7 +343,7 @@ class CausalAbstraction:
             high_ivn = Intervention.batched(
                 high_base_input, high_ivn_dict, high_loc_dict,
                 batch_dim=self.batch_dim, cache_base_results=self.cache_interv_results)
-            
+
             minibatches.append({"low_intervention": low_ivn,
                                 "high_intervention": high_ivn})
 
