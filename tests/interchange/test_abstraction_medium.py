@@ -85,7 +85,7 @@ def verify_mapping(ca, mapping, result, low_inputs, low_model):
         low_node = key
     low_indices = reduce_dim(mapping["node"][low_node], 0)
     realizations = []
-    
+
     for low_input in low_inputs:
         # low_input = Intervention({key:input_mapping(np.expand_dims(np.expand_dims(inputs[0].base[key], 1), 1)) for key in input.base.values}, dict())
         realizations.append(low_model.compute_node(low_node, low_input)[low_indices])
@@ -132,7 +132,7 @@ def test_find_abstraction():
     high_model= BooleanLogicProgram()
     low_model = NeuralNetwork()
 
-    for (a, b, c) in product((0., 1.), repeat=3):
+    for (a, b, c) in product((-1., 1.), repeat=3):
         li = GraphInput({
             "leaf1": torch.tensor(a),
             "leaf2": torch.tensor(b),
@@ -155,7 +155,7 @@ def test_mapping_generation():
             "leaf1": torch.tensor(a),
             "leaf2": torch.tensor(b),
             "leaf3": torch.tensor(c)
-        }) for (a, b, c) in product((0., 1.), repeat=3)
+        }) for (a, b, c) in product((-1., 1.), repeat=3)
     ]
 
     high_inputs = [
@@ -214,9 +214,9 @@ def test_abstraction_medium():
             "leaf1": torch.tensor(a),
             "leaf2": torch.tensor(b),
             "leaf3": torch.tensor(c)
-        }) for (a, b, c) in product((0., 1.), repeat=3)
+        }) for (a, b, c) in product((-1., 1.), repeat=3)
     ]
-    
+
     high_inputs = [
         GraphInput({
             "leaf1": torch.tensor(a),
@@ -224,7 +224,7 @@ def test_abstraction_medium():
             "leaf3": torch.tensor(c)
         }) for (a, b, c) in product((False, True), repeat=3)
     ]
-    
+
     high_ivns = [
         Intervention({
             "leaf1": torch.tensor(a),
@@ -235,13 +235,13 @@ def test_abstraction_medium():
         })
         for (a, b, c, y) in product((True, False), repeat=4)
     ]
-    
+
     fixed_node_mapping =  {x: {x: None} for x in ["root", "leaf1",  "leaf2", "leaf3"]}
     low_nodes_to_indices = {
         "hidden2": [None],
         "hidden1": [LOC[:,0] , LOC[:, 1], LOC[:, 2], LOC[:,:2], LOC[:,1:], LOC[:, :]]
     }
-    
+
     ca = CausalAbstraction(
         low_model=low_model,
         high_model=high_model,
@@ -330,9 +330,8 @@ def test_abstraction_medium():
         success_list.append((success,mapping))
 
     pprint(success_list)
-    
+
+
 #for mapping in create_possible_mappings(low_model,high_model, fixed_assignments={x:{x:Location()[:]} for x in ["bool_root", "leaf1",  "leaf2", "leaf3", "leaf4"]}):
 #    print(mapping)
 #    print("done \n\n")
-
-
