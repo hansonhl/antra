@@ -241,9 +241,8 @@ class CausalAbstraction:
 
         # TODO: Keep track of where the interventions came from
         trace_origins = self.result_format == "verbose"
-        if trace_origins:
-            origins = [self.low_keys_to_interventions[low_ivn_batch.keys[i]] \
-                       for i in range(actual_batch_size)]
+        origins = [self.low_keys_to_interventions[low_ivn_batch.keys[i]] \
+                   for i in range(actual_batch_size)] if trace_origins else None
 
         for high_node, high_values in high_ivn_res.items():
             if high_node not in self.high_intervention_range:
@@ -253,20 +252,21 @@ class CausalAbstraction:
 
             rzns = [Realization() for _ in range(actual_batch_size)]
             # print("\nnum low mappings", len(self.curr_mapping[high_node]))
-            for low_node, low_loc in self.curr_mapping[high_node].items():
-                ser_low_loc = location.serialize_location(low_loc)
-                # ser_low_loc = location.serialize_location(
-                #     location.reduce_dim(low_loc, low_ivn_batch.batch_dim))
-                low_values = low_ivn_res[low_node] if low_loc is None else low_ivn_res[low_node][low_loc]
-                key = (low_node, ser_low_loc)
-                # print(f"low_values, shape={low_values.shape}")
-                # print(low_values)
-                for i in range(actual_batch_size):
-                    _low_val = utils.idx_by_dim(low_values, i, low_ivn_batch.batch_dim)
-                    if trace_origins:
-                        rzns[i].add(key, _low_val, origins[i])
-                    else:
-                        rzns[i][key] = _low_val
+            for low_node, low_loc_list in self.curr_mapping[high_node].items():
+                if not isinstance(low_loc_list, list):
+                    low_loc_list = [low_loc_list]
+                for low_loc in low_loc_list:
+                    ser_low_loc = location.serialize_location(low_loc)
+                    low_values = low_ivn_res[low_node] if low_loc is None else low_ivn_res[low_node][low_loc]
+                    key = (low_node, ser_low_loc)
+                    # print(f"low_values, shape={low_values.shape}")
+                    # print(low_values)
+                    for i in range(actual_batch_size):
+                        _low_val = utils.idx_by_dim(low_values, i, low_ivn_batch.batch_dim)
+                        if origins:
+                            rzns[i].add(key, _low_val, origins[i])
+                        else:
+                            rzns[i][key] = _low_val
 
                     # pprint(rzns)
                     # print(f"{i} {rzns[i][(low_node, ser_low_loc)]}")
