@@ -382,60 +382,60 @@ class InterchangeDataset(IterableDataset):
     #         low_intervs = self.get_low_interventions(high_interv)
     #         self.examples.extend((high_interv, low_interv) for low_interv in low_intervs)
 
-    def _get_realizations(self, high_intervention: Intervention) -> List[Realization]:
-        high_interv: GraphInput = high_intervention.intervention
-        # low_base = self.high_keys_to_low_inputs[high_intervention.base.key]
+    # def _get_realizations(self, high_intervention: Intervention) -> List[Realization]:
+    #     high_interv: GraphInput = high_intervention.intervention
+    #     # low_base = self.high_keys_to_low_inputs[high_intervention.base.key]
+    #
+    #     # all_realizations: List[Realization] = [{}]
+    #     all_realizations: List[Realization] = [Realization()]
+    #
+    #     for high_var_name, high_var_value in high_interv.values.items():
+    #         ser_high_value = utils.serialize(high_var_value)
+    #         # new_partial_intervs: List[Realization] = [{}]
+    #         new_partial_intervs: List[Realization] = []
+    #         for rzn in all_realizations:
+    #             for realization in self.all_realizations[(high_var_name, ser_high_value)]:
+    #                 # realization is Dict[(low node name, serialized location), value]
+    #                 rzn_copy = copy.copy(rzn)
+    #                 rzn_copy.update(realization)
+    #                 new_partial_intervs.append(rzn_copy)
+    #             for realization in self.curr_realizations[(high_var_name, ser_high_value)]:
+    #                 rzn_copy = copy.copy(rzn)
+    #                 rzn_copy.update(realization)
+    #                 rzn_copy.accepted = True
+    #                 # pi_copy["accepted"] = True
+    #                 new_partial_intervs.append(rzn_copy)
+    #
+    #         all_realizations = new_partial_intervs
+    #
+    #     return all_realizations
 
-        # all_realizations: List[Realization] = [{}]
-        all_realizations: List[Realization] = [Realization()]
-
-        for high_var_name, high_var_value in high_interv.values.items():
-            ser_high_value = utils.serialize(high_var_value)
-            # new_partial_intervs: List[Realization] = [{}]
-            new_partial_intervs: List[Realization] = []
-            for rzn in all_realizations:
-                for realization in self.all_realizations[(high_var_name, ser_high_value)]:
-                    # realization is Dict[(low node name, serialized location), value]
-                    rzn_copy = copy.copy(rzn)
-                    rzn_copy.update(realization)
-                    new_partial_intervs.append(rzn_copy)
-                for realization in self.curr_realizations[(high_var_name, ser_high_value)]:
-                    rzn_copy = copy.copy(rzn)
-                    rzn_copy.update(realization)
-                    rzn_copy.accepted = True
-                    # pi_copy["accepted"] = True
-                    new_partial_intervs.append(rzn_copy)
-
-            all_realizations = new_partial_intervs
-
-        return all_realizations
-
-    def get_low_interventions(self, high_intervention: Intervention) -> List[Intervention]:
-        low_base = self.ca.high_keys_to_low_inputs[high_intervention.base.keys]
-
-        if high_intervention.is_empty():
-            return [Intervention(low_base, {})]
-        else:
-            # print("=============Getting rlzns for high intervention=============")
-            # print(high_intervention)
-            # print("-------------Low intervs------------")
-            all_realizations = self._get_realizations(high_intervention)
-            # print("all rzns")
-            # pprint(all_realizations)
-            # print("all_partial_intervs", all_realizations)
-            low_interventions = []
-            for rzn in all_realizations:
-                # if "accepted" not in rzn:
-                #     continue
-                # del rzn["accepted"]
-                if not rzn.accepted: continue
-                new_low_interv = Intervention.from_realization(low_base, rzn)
-                # new_low_interv = self.get_intervention_from_realization(low_base, rzn) # unbatched
-                # print("** got new low interv")
-                # print(new_low_interv)
-                low_interventions.append(new_low_interv)
-
-            return low_interventions
+    # def get_low_interventions(self, high_intervention: Intervention) -> List[Intervention]:
+    #     low_base = self.ca.high_keys_to_low_inputs[high_intervention.base.keys]
+    #
+    #     if high_intervention.is_empty():
+    #         return [Intervention(low_base, {})]
+    #     else:
+    #         # print("=============Getting rlzns for high intervention=============")
+    #         # print(high_intervention)
+    #         # print("-------------Low intervs------------")
+    #         all_realizations = self._get_realizations(high_intervention)
+    #         # print("all rzns")
+    #         # pprint(all_realizations)
+    #         # print("all_partial_intervs", all_realizations)
+    #         low_interventions = []
+    #         for rzn in all_realizations:
+    #             # if "accepted" not in rzn:
+    #             #     continue
+    #             # del rzn["accepted"]
+    #             if not rzn.accepted: continue
+    #             new_low_interv = Intervention.from_realization(low_base, rzn)
+    #             # new_low_interv = self.get_intervention_from_realization(low_base, rzn) # unbatched
+    #             # print("** got new low interv")
+    #             # print(new_low_interv)
+    #             low_interventions.append(new_low_interv)
+    #
+    #         return low_interventions
 
     def get_intervention_from_realization(self, low_base: GraphInput, rzn: Realization) -> Intervention:
         # partial_interv_dict may contain multiple entries with same node but different locations,
@@ -459,6 +459,14 @@ class InterchangeDataset(IterableDataset):
         return Intervention(low_base, intervention=val_dict, location=loc_dict,
                             realization=rzn)
 
+    def _prepare_rzn_to_yield(self, low_base, high_intervention, rzn):
+        low_intervention = Intervention.from_realization(low_base, rzn)
+        if self.ca.result_format == "verbose":
+            self.ca.low_keys_to_interventions[low_intervention.keys] = low_intervention
+        return {
+            "low_intervention": low_intervention,
+            "high_intervention": high_intervention
+        }
 
     # TODO: Yield while getting the realizations
     def __iter__(self):
@@ -466,24 +474,45 @@ class InterchangeDataset(IterableDataset):
             if self.did_empty_interventions and high_intervention.is_empty():
                 continue
             low_base = self.ca.high_keys_to_low_inputs[high_intervention.base.keys]
-            realizations = self._get_realizations(high_intervention)
-            for rzn in realizations:
-                if not rzn.is_empty() and not rzn.accepted: continue
 
-                low_intervention = Intervention.from_realization(low_base, rzn)
-                # low_intervention = self.get_intervention_from_realization(low_base, rzn)
+            if high_intervention.is_empty():
+                yield self._prepare_rzn_to_yield(low_base, high_intervention, Realization())
 
-                # store each intervention if necessary
-                if self.ca.result_format == "verbose":
-                    # print(f"added {low_intervention.keys=}")
-                    self.ca.low_keys_to_interventions[low_intervention.keys] = low_intervention
+            high_interv: GraphInput = high_intervention.intervention
+            all_realizations: List[Realization] = [Realization()]
+            for i, (high_var_name, high_var_value) in enumerate(high_interv.values.items()):
+                is_last_one = (i == len(high_interv.values) - 1)
+                ser_high_value = utils.serialize(high_var_value)
+                # new_partial_intervs: List[Realization] = [{}]
+                new_partial_intervs: List[Realization] = []
+                for rzn in all_realizations:
+                    for realization in self.all_realizations[(high_var_name, ser_high_value)]:
+                        # realization is Dict[(low node name, serialized location), value]
+                        rzn_copy = copy.copy(rzn)
+                        rzn_copy.update(realization)
+                        if is_last_one:
+                            if not rzn_copy.accepted: continue
+                            yield self._prepare_rzn_to_yield(low_base, high_intervention, rzn_copy)
+                        else:
+                            new_partial_intervs.append(rzn_copy)
 
-                yield {
-                    "low_intervention": low_intervention,
-                    "high_intervention": high_intervention,
-                    # "high_output": None,
-                    # "low_output": None
-                }
+                    for realization in self.curr_realizations[(high_var_name, ser_high_value)]:
+                        rzn_copy = copy.copy(rzn)
+                        rzn_copy.update(realization)
+                        rzn_copy.accepted = True
+                        # pi_copy["accepted"] = True
+                        if is_last_one:
+                            yield self._prepare_rzn_to_yield(low_base, high_intervention, rzn_copy)
+                        else:
+                            new_partial_intervs.append(rzn_copy)
+
+                all_realizations = new_partial_intervs
+
+            # realizations = self._get_realizations(high_intervention)
+            # for rzn in realizations:
+            #     if not rzn.is_empty() and not rzn.accepted: continue
+            #     yield self._prepare_rzn_to_yield(low_base, high_intervention, rzn)
+
 
     def get_dataloader(self, **kwargs):
         return DataLoader(self, collate_fn=self.collate_fn, **kwargs)
