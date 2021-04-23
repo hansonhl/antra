@@ -166,19 +166,12 @@ class BatchedInterchange:
                     low_intervention = minibatch["low_intervention"]
                     high_intervention = minibatch["high_intervention"]
 
-                    # print("****** Inspect minibatch ******")
-                    # pprint(low_intervention)
-                    # pprint(high_intervention)
-
-
                     actual_batch_size = low_intervention.get_batch_size()
                     num_interventions += actual_batch_size
 
                     high_base_res, high_ivn_res = self.high_model.intervene_all_nodes(high_intervention)
                     low_base_res, low_ivn_res = self.low_model.intervene_all_nodes(low_intervention)
-                    # print(f"{high_ivn_res['node']=}")
-                    # print(f"{low_ivn_res['node1']=}")
-                    # print("low_ivn_res", low_ivn_res)
+
                     if not high_intervention.is_empty():
                         if self.result_format == "verbose":
                             self._add_verbose_results(
@@ -197,12 +190,6 @@ class BatchedInterchange:
                     total_new_realizations += num_new_realizations
                     merge_realization_mappings(new_realizations, realizations)
 
-                    # if iteration == 1 and not high_intervention.is_empty(): return None
-            # print("total_new_realizations", total_new_realizations)
-            # print("number of interventions run", num_interventions)
-            # print("new_realizations")
-            # print(new_realizations)
-
             if iteration == 0:
                 icd.did_empty_interventions = True
             iteration += 1
@@ -210,8 +197,6 @@ class BatchedInterchange:
                 break
             else:
                 icd.update_realizations(new_realizations)
-                # print("all realizations")
-                # print(icd.all_realizations)
 
         return results
 
@@ -268,13 +253,6 @@ class BatchedInterchange:
                         else:
                             rzns[i][key] = _low_val
 
-                    # pprint(rzns)
-                    # print(f"{i} {rzns[i][(low_node, ser_low_loc)]}")
-                        # utils.idx_by_dim(low_values, i, low_ivn.batch_dim)
-            # print(f"low_values, {low_values}")
-            # print("rzns")
-            # pprint(rzns)
-
             for i in range(actual_batch_size):
                 high_value = utils.idx_by_dim(high_values, i, high_ivn_batch.batch_dim)
                 ser_high_value = utils.serialize(high_value)
@@ -302,16 +280,11 @@ class BatchedInterchange:
         """
         # package up a list of individual interventions into multiple batched interventions
         # batch may contain interventions on different locations
-        # pprint("******* Collating batch")
-        # pprint(batch)
         high_node_to_minibatches = defaultdict(list)
         for d in batch:
             high_nodes = tuple(sorted(d["high_intervention"].intervention._values.keys()))
             high_node_to_minibatches[high_nodes].append(d)
-        # high_node_to_minibatches = dict(high_node_to_minibatches)
-        # pprint(len(high_node_to_minibatches[tuple()]))
-        # pprint(high_node_to_minibatches)
-        # pprint(len(high_node_to_minibatches[('node',)]))
+
         minibatches = []
         for minibatch_dicts in high_node_to_minibatches.values():
             low_base_dict, low_ivn_dict, low_loc_dict = pack_interventions(
@@ -376,6 +349,85 @@ class InterchangeDataset(IterableDataset):
         merge_realization_mappings(self.all_realizations, self.curr_realizations)
         self.curr_realizations = new_realizations
 
+    def get_intervention_from_realization(self, low_base: GraphInput, rzn: Realization) -> Intervention:
+        # partial_interv_dict may contain multiple entries with same node but different locations,
+        # e.g {(nodeA, loc1): val, (nodeA, loc2): val}, need to find and merge them
+        val_dict, loc_dict = defaultdict(list), defaultdict(list)
+
+        for (node_name, ser_low_loc), val in rzn.items():
+            val_dict[node_name].append(val)
+            low_loc = location.deserialize_location(ser_low_loc)
+            loc_dict[node_name].append(low_loc)
+
+        for node_name in val_dict.keys():
+            if len(val_dict[node_name]) == 1:
+                val_dict[node_name] = val_dict[node_name][0]
+            if len(loc_dict[node_name]) == 1:
+                if loc_dict[node_name][0] is None:
+                    del loc_dict[node_name]
+                else:
+                    loc_dict[node_name] = loc_dict[node_name][0]
+
+        return Intervention(low_base, intervention=val_dict, location=loc_dict,
+                            realization=rzn)
+
+    def _prepare_rzn_to_yield(self, low_base, high_intervention, rzn):
+        low_intervention = Intervention.from_realization(low_base, rzn)
+        if self.ca.result_format == "verbose":
+            self.ca.low_keys_to_interventions[low_intervention.keys] = low_intervention
+        return {
+            "low_intervention": low_intervention,
+            "high_intervention": high_intervention
+        }
+
+    # TODO: Yield while getting the realizations
+    def __iter__(self):
+        for high_intervention in self.ca.high_interventions:
+            if self.did_empty_interventions and high_intervention.is_empty():
+                continue
+            low_base = self.ca.high_keys_to_low_inputs[high_intervention.base.keys]
+
+            if high_intervention.is_empty():
+                yield self._prepare_rzn_to_yield(low_base, high_intervention, Realization())
+
+            high_interv: GraphInput = high_intervention.intervention
+            all_realizations: List[Realization] = [Realization()]
+            for i, (high_var_name, high_var_value) in enumerate(high_interv.values.items()):
+                is_last_one = (i == len(high_interv.values) - 1)
+                ser_high_value = utils.serialize(high_var_value)
+
+                new_partial_intervs: List[Realization] = []
+                for rzn in all_realizations:
+                    for realization in self.all_realizations[(high_var_name, ser_high_value)]:
+                        # realization is Dict[(low node name, serialized location), value]
+                        rzn_copy = copy.copy(rzn)
+                        rzn_copy.update(realization)
+                        if is_last_one:
+                            if not rzn_copy.accepted: continue
+                            yield self._prepare_rzn_to_yield(low_base, high_intervention, rzn_copy)
+                        else:
+                            new_partial_intervs.append(rzn_copy)
+
+                    for realization in self.curr_realizations[(high_var_name, ser_high_value)]:
+                        rzn_copy = copy.copy(rzn)
+                        rzn_copy.update(realization)
+                        rzn_copy.accepted = True
+
+                        if is_last_one:
+                            yield self._prepare_rzn_to_yield(low_base, high_intervention, rzn_copy)
+                        else:
+                            new_partial_intervs.append(rzn_copy)
+
+                all_realizations = new_partial_intervs
+
+            # realizations = self._get_realizations(high_intervention)
+            # for rzn in realizations:
+            #     if not rzn.is_empty() and not rzn.accepted: continue
+            #     yield self._prepare_rzn_to_yield(low_base, high_intervention, rzn)
+
+    def get_dataloader(self, **kwargs):
+        return DataLoader(self, collate_fn=self.collate_fn, **kwargs)
+
     # def populate_dataset(self):
     #     self.examples = []
     #     for high_interv in self.high_interventions:
@@ -437,86 +489,6 @@ class InterchangeDataset(IterableDataset):
     #
     #         return low_interventions
 
-    def get_intervention_from_realization(self, low_base: GraphInput, rzn: Realization) -> Intervention:
-        # partial_interv_dict may contain multiple entries with same node but different locations,
-        # e.g {(nodeA, loc1): val, (nodeA, loc2): val}, need to find and merge them
-        val_dict, loc_dict = defaultdict(list), defaultdict(list)
-
-        for (node_name, ser_low_loc), val in rzn.items():
-            val_dict[node_name].append(val)
-            low_loc = location.deserialize_location(ser_low_loc)
-            loc_dict[node_name].append(low_loc)
-
-        for node_name in val_dict.keys():
-            if len(val_dict[node_name]) == 1:
-                val_dict[node_name] = val_dict[node_name][0]
-            if len(loc_dict[node_name]) == 1:
-                if loc_dict[node_name][0] is None:
-                    del loc_dict[node_name]
-                else:
-                    loc_dict[node_name] = loc_dict[node_name][0]
-
-        return Intervention(low_base, intervention=val_dict, location=loc_dict,
-                            realization=rzn)
-
-    def _prepare_rzn_to_yield(self, low_base, high_intervention, rzn):
-        low_intervention = Intervention.from_realization(low_base, rzn)
-        if self.ca.result_format == "verbose":
-            self.ca.low_keys_to_interventions[low_intervention.keys] = low_intervention
-        return {
-            "low_intervention": low_intervention,
-            "high_intervention": high_intervention
-        }
-
-    # TODO: Yield while getting the realizations
-    def __iter__(self):
-        for high_intervention in self.ca.high_interventions:
-            if self.did_empty_interventions and high_intervention.is_empty():
-                continue
-            low_base = self.ca.high_keys_to_low_inputs[high_intervention.base.keys]
-
-            if high_intervention.is_empty():
-                yield self._prepare_rzn_to_yield(low_base, high_intervention, Realization())
-
-            high_interv: GraphInput = high_intervention.intervention
-            all_realizations: List[Realization] = [Realization()]
-            for i, (high_var_name, high_var_value) in enumerate(high_interv.values.items()):
-                is_last_one = (i == len(high_interv.values) - 1)
-                ser_high_value = utils.serialize(high_var_value)
-                # new_partial_intervs: List[Realization] = [{}]
-                new_partial_intervs: List[Realization] = []
-                for rzn in all_realizations:
-                    for realization in self.all_realizations[(high_var_name, ser_high_value)]:
-                        # realization is Dict[(low node name, serialized location), value]
-                        rzn_copy = copy.copy(rzn)
-                        rzn_copy.update(realization)
-                        if is_last_one:
-                            if not rzn_copy.accepted: continue
-                            yield self._prepare_rzn_to_yield(low_base, high_intervention, rzn_copy)
-                        else:
-                            new_partial_intervs.append(rzn_copy)
-
-                    for realization in self.curr_realizations[(high_var_name, ser_high_value)]:
-                        rzn_copy = copy.copy(rzn)
-                        rzn_copy.update(realization)
-                        rzn_copy.accepted = True
-                        # pi_copy["accepted"] = True
-                        if is_last_one:
-                            yield self._prepare_rzn_to_yield(low_base, high_intervention, rzn_copy)
-                        else:
-                            new_partial_intervs.append(rzn_copy)
-
-                all_realizations = new_partial_intervs
-
-            # realizations = self._get_realizations(high_intervention)
-            # for rzn in realizations:
-            #     if not rzn.is_empty() and not rzn.accepted: continue
-            #     yield self._prepare_rzn_to_yield(low_base, high_intervention, rzn)
-
-
-    def get_dataloader(self, **kwargs):
-        return DataLoader(self, collate_fn=self.collate_fn, **kwargs)
-
 
 def serialize_realization(r: Realization) -> SerializedRealization:
     return tuple((k, utils.serialize(r[k])) for k in sorted(r.keys()))
@@ -575,11 +547,7 @@ def pack_interventions(
         for node, loc in ivn.location.items():
             if node not in loc_dict:
                 loc_dict[node] = loc
-                # if node not in multi_loc_nodes:
-                #     loc_dict[node] = location.expand_dim(loc, batch_dim)
-                # else:
-                #     assert isinstance(loc, list)
-                #     loc_dict[node] = [location.expand_dim(l, batch_dim) for l in loc]
+
             else:
                 # if node not in multi_loc_nodes and location.expand_dim(loc, batch_dim) != loc_dict[node]:
                 if node not in multi_loc_nodes and loc != loc_dict[node]:

@@ -246,12 +246,11 @@ def test_abstraction_medium():
     fixed_node_mapping =  {x: {x: None} for x in ["root", "leaf1",  "leaf2", "leaf3"]}
     low_nodes_to_indices = {
         "hidden2": [None],
-        "hidden1": [LOC[:,0] , LOC[:, 1], LOC[:, 2], LOC[:,:2], LOC[:,1:], LOC[:, :]]
+        "hidden1": [LOC[:,0], LOC[:, 1], LOC[:, 2], LOC[:,:2], LOC[:,1:], LOC[:, :]]
     }
+    # loc for bert LOC[:,3,:] (batch_size, sentence_len, hidden_dim)
 
-    # TODO: disjoint location [LOC[:,0], LOC[:,2]]
-
-    ca = BatchedInterchange(
+    experiment = BatchedInterchange(
         low_model=low_model,
         high_model=high_model,
         low_inputs=low_inputs,
@@ -263,7 +262,7 @@ def test_abstraction_medium():
         batch_size=12,
     )
 
-    find_abstr_res = ca.find_abstractions()
+    find_abstr_res = experiment.find_abstractions()
 
 
     success_list = []
@@ -276,7 +275,7 @@ def test_abstraction_medium():
         print(f"Reduced loc: {red_low_loc}")
 
         success = True
-        verify_mapping(ca, mapping, result, low_inputs, low_model)
+        verify_mapping(experiment, mapping, result, low_inputs, low_model)
         # G, causal_edges = construct_graph(low_model,high_model, mapping, result, realizations_to_inputs, "node", "root")
         # cliques = find_cliques(G, causal_edges, 5)
 
@@ -286,8 +285,8 @@ def test_abstraction_medium():
         for keys in result:
             # low_intervention, high_intervention = interventions
             low_ivn_key, high_ivn_key = keys
-            low_ivn = ca.low_keys_to_interventions[low_ivn_key]
-            high_ivn = ca.high_keys_to_interventions[high_ivn_key]
+            low_ivn = experiment.low_keys_to_interventions[low_ivn_key]
+            high_ivn = experiment.high_keys_to_interventions[high_ivn_key]
 
             _, low_res = low_model.intervene(low_ivn)
             _, high_res = high_model.intervene(high_ivn)
@@ -321,14 +320,15 @@ def test_abstraction_medium():
 
             # print(f"{expected_low_res=}")
             # print(f"{expected_high_res=}")
-            #
-            # print("low_res", low_res)
-            # print("high_res", high_res)
-            # print("low:",low_ivn.intervention.values)
-            # print("lowbase:", low_ivn.base.values)
-            # print("high:", high_ivn.intervention.values)
-            # print("highbase:", high_ivn.base.values)
-            # print("success:", result[keys])
+
+            print("low_res", low_res)
+            print("high_res", high_res)
+            print("low intervention:",low_ivn.intervention.values)
+            print(f"low loc {low_node}", location.location_to_str(low_ivn.location[low_node], add_brackets=True))
+            print("lowbase:", low_ivn.base.values)
+            print("high intervetion:", high_ivn.intervention.values)
+            print("highbase:", high_ivn.base.values)
+            print("success:", result[keys])
             #
             # print("\n\n")
             # verify_intervention(mapping,low_intervention, high_intervention, result[keys])
