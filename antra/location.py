@@ -1,4 +1,6 @@
 from typing import Union, Tuple
+import itertools
+
 
 
 LocationType = Union[None, int, slice, type(...), Tuple['LocationType', ...]]
@@ -108,3 +110,30 @@ def expand_dim(l: LocationType, dim) -> LocationType:
         raise ValueError(f"Cannot expand {len(l)}-dim index at dim {dim} (must be <= {len(l)})")
     dim = dim % (len(l) + 1)
     return l[:dim] + (full_slice,) + l[dim:]
+
+def generate_all_locations(length, batched=True):#(length: int) -> set(LocationType):
+    locations = []
+    for boolean_assignment in itertools.product([True, False], repeat=length):
+        starts = []
+        ends  =  []
+        is_start = True
+        for i in range(length):
+            if boolean_assignment[i] and is_start:
+                starts.append(i)
+                is_start = False
+            elif not boolean_assignment[i] and not is_start:
+                ends.append(i)
+                is_start = True
+            if boolean_assignment[i] and i == length - 1 and not is_start:
+                ends.append(length)
+        if batched:
+            if len(starts) == 1 and len(ends) == 1:
+                locations.append(_LOC[:,starts[0]:ends[0]])
+            else:
+                locations.append([_LOC[:,start:end] for start,end in zip(starts,ends)] )
+        else:
+            if len(starts) == 1 and len(ends) == 1:
+                locations.append(_LOC[starts[0]:ends[0]])
+            else:
+                locations.append([_LOC[start:end] for start,end in zip(starts,ends)] )
+    return locations
