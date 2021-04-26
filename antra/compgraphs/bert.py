@@ -3,8 +3,11 @@ import logging
 
 from antra import ComputationGraph, GraphNode, GraphInput
 from antra.utils import serialize
+from transformers import BatchEncoding, BertPreTrainedModel
+from transformers.models.bert import BertForSequenceClassification
 
 logger = logging.getLogger(__name__)
+
 
 def _generate_bert_layer_fxn(layer_module, i):
     """ Generate a function for a layer in bert.
@@ -159,8 +162,12 @@ def generate_bert_compgraph(bert_model, final_node="pool"):
     else:
         raise ValueError(f"Invalid final node specification: {final_node}!")
 
+
 class BertGraphInput(GraphInput):
-    def __init__(self, input_dict, cache_results=True):
+    def __init__(self,
+		 input_dict: BatchEncoding,
+		 cache_results=True):
+	keys = [serialize(x) for x in input_dict["input_ids"]]
         super().__init__(
             values=input_dict,
             batched=True,
@@ -215,7 +222,7 @@ class BertForMaskedLMCompGraph(ComputationGraph):
 
 
 class BertForNextSentecePredictionCompGraph(ComputationGraph):
-    def __init__(self, model):
+    def __init__(self, model: BertPreTrainedModel):
         self.model = model
         self.bert_model = model.bert
         self.cls = model.cls
@@ -230,7 +237,7 @@ class BertForNextSentecePredictionCompGraph(ComputationGraph):
 
 
 class BertForSequenceClassificationCompGraph(ComputationGraph):
-    def __init__(self, model):
+    def __init__(self, model: BertForSequenceClassification):
         self.model = model
         self.bert_model = model.bert
         self.dropout = model.dropout
@@ -244,6 +251,7 @@ class BertForSequenceClassificationCompGraph(ComputationGraph):
             return self.cls(self.dropout(h))
 
         super().__init__(cls_head)
+
 
 class BertForTokenClassificationCompGraph(ComputationGraph):
     def __init__(self, model):
