@@ -115,7 +115,8 @@ def test_abstraction_simple():
         high_inputs=inputs,
         high_interventions=total_high_interventions,
         fixed_node_mapping=fixed_node_mapping,
-        result_format="verbose",
+        store_low_interventions=True,
+        result_format="simple",
         batch_size=12,
     )
     assert len(ca.high_intervention_range) == 1
@@ -227,3 +228,144 @@ def test_abstraction_simple():
     #     success_list.append(success)
     # print(success_list)
     # print("Success?", success)
+
+def test_abstraction_equality():
+    high_model= BooleanLogicProgram()
+    low_model = BooleanLogicProgram2()
+    #for mapping in create_possible_mappings(low_model,high_model, fixed_assignments={x:{x:Location()[:]} for x in ["root", "leaf1",  "leaf2", "leaf3", "leaf4"]}):
+    #    print(mapping)
+    #    print("done \n\n")
+
+    inputs = [
+        GraphInput({
+            "leaf1": torch.tensor([a]),
+            "leaf2": torch.tensor([b]),
+            "leaf3": torch.tensor([c]),
+            "leaf4": torch.tensor([d])
+        })
+        for (a, b, c, d) in product((True, False), repeat=4)
+    ]
+
+    total_high_interventions = [
+        Intervention({
+            "leaf1": torch.tensor([a]),
+            "leaf2": torch.tensor([b]),
+            "leaf3": torch.tensor([c]),
+            "leaf4": torch.tensor([d])
+        }, {
+            "node": torch.tensor([y])
+        })
+        for (a, b, c, d, y) in product((True, False), repeat=5)
+    ]
+
+    # total_high_interventions = []
+    # for x in [(np.array([a]),np.array([b]),np.array([c]),np.array([d])) for a in [0, 1] for b in [0, 1] for c in [0, 1] for d in [0, 1]]:
+    #     for y in [np.array([0]), np.array([1])]:
+    #         total_high_interventions.append(Intervention({"leaf1":x[0],"leaf2":x[1],"leaf3":x[2],"leaf4":x[3], }, {"node":y}))
+    # high_model.intervene_node(high_model.root.name,inputs[0])
+    # low_model.intervene_node(high_model.root.name,inputs[0])
+
+    fixed_node_mapping =  {x: {x: None} for x in ["root", "leaf1",  "leaf2", "leaf3", "leaf4"]}
+
+    ca = BatchedInterchange(
+        low_model=low_model,
+        high_model=high_model,
+        low_inputs=inputs,
+        high_inputs=inputs,
+        high_interventions=total_high_interventions,
+        fixed_node_mapping=fixed_node_mapping,
+        store_low_interventions=True,
+        result_format="equality",
+        batch_size=12,
+    )
+    assert len(ca.high_intervention_range) == 1
+    assert ca.high_intervention_range["node"] == {(False,), (True,)}
+
+    assert len(ca.mappings) == 2
+
+    # visual inspection
+    for k, v in ca.high_to_low_input_keys.items():
+        assert k == v
+    print("mappings")
+    pprint(ca.mappings)
+    print("high intervention range")
+    pprint(ca.high_intervention_range)
+
+    mapping1 = ca.mappings[0] if "node1" in ca.mappings[0]["node"] else ca.mappings[1]
+    mapping2 = ca.mappings[0] if "node2" in ca.mappings[0]["node"] else ca.mappings[1]
+
+    # test mapping 1
+    # test mapping 1
+    print("========== testing mapping 1 ==========")
+    pprint(mapping1)
+
+    result1 = ca.test_mapping(mapping1)
+
+    # return
+    success1 = True
+    for ivn_keys in result1:
+        low_ivn_key, high_ivn_key = ivn_keys
+        low_ivn = ca.low_keys_to_interventions[low_ivn_key]
+        high_ivn = ca.high_keys_to_interventions[high_ivn_key]
+
+        leaf1 = low_ivn.base["leaf1"]
+        leaf2 = low_ivn.base["leaf2"]
+        leaf3 = low_ivn.base["leaf3"]
+        leaf4 = low_ivn.base["leaf4"]
+        node = high_ivn.intervention["node"]
+        high_base_res = leaf1 & leaf2 & leaf3 & leaf4
+        high_ivn_res = node & leaf3 & leaf4
+
+        node1 = low_ivn.intervention["node1"]
+        assert node1 == node
+        low_base_res = leaf1 & leaf2 & leaf3 & leaf4
+        low_ivn_res = node1 & leaf3 & leaf4
+
+        d = result1[ivn_keys]
+        assert d["ivn_eq"] == (high_ivn_res == low_ivn_res)
+        assert d["base_eq"] == (high_base_res == low_base_res)
+        assert d["high_base_eq_ivn"] == (high_base_res == high_ivn_res)
+
+        # print("---- High ivn")
+        # print(high_ivn)
+        # print("---- Low ivn")
+        # print(low_ivn)
+        # print(f"RESULT: {result1[ivn_keys]}\n")
+
+        if not d["ivn_eq"]: success1 = False
+
+    assert success1
+
+
+    print("========== testing mapping 2 ==========")
+    pprint(mapping2)
+    result2 = ca.test_mapping(mapping2)
+    success2 = True
+
+    for ivn_keys in result2:
+
+        low_ivn_key, high_ivn_key = ivn_keys
+        low_ivn = ca.low_keys_to_interventions[low_ivn_key]
+        high_ivn = ca.high_keys_to_interventions[high_ivn_key]
+
+        leaf1 = low_ivn.base["leaf1"]
+        leaf2 = low_ivn.base["leaf2"]
+        leaf3 = low_ivn.base["leaf3"]
+        leaf4 = low_ivn.base["leaf4"]
+        node = high_ivn.intervention["node"]
+        high_base_res = leaf1 & leaf2 & leaf3 & leaf4
+        high_ivn_res = node & leaf3 & leaf4
+
+        node2 = low_ivn.intervention["node2"]
+        low_base_res = leaf1 & leaf2 & leaf3 & leaf4
+        low_ivn_res = node2 & leaf4
+
+        d = result2[ivn_keys]
+        assert d["ivn_eq"] == (high_ivn_res == low_ivn_res)
+        assert d["base_eq"] == (high_base_res == low_base_res)
+        assert d["high_base_eq_ivn"] == (high_base_res == high_ivn_res)
+
+        if not d["ivn_eq"]: success2 = False
+
+
+    assert not success2

@@ -35,7 +35,6 @@ class BatchedInterchange:
             high_inputs: Sequence[GraphInput],
             high_interventions: Sequence[Intervention],
             fixed_node_mapping: AbstractionMapping,
-            result_format: str = "counts",
             high_to_low_keys: Optional[Dict[SerializedType, SerializedType]]=None,
             ignored_low_nodes: Optional[Sequence[str]]=None,
             low_nodes_to_indices: Optional[Dict[LowNodeName, List[LocationType]]]=None,
@@ -43,6 +42,9 @@ class BatchedInterchange:
             batch_size: int = 1,
             cache_interv_results: bool = False,
             cache_base_results: bool = True,
+            result_format: str = "equality",
+            store_low_interventions: bool = False,
+            trace_realization_origins: bool = False,
             device: Optional[torch.device] = None
     ):
         """
@@ -52,7 +54,6 @@ class BatchedInterchange:
         :param high_inputs:
         :param high_interventions:
         :param fixed_node_mapping:
-        :param result_format: type of results to return
         :param high_to_low_keys: A mapping from high- to low-level model
             inputs. By default, assume `low_inputs` and `high_inputs` are the
             same length and the mapping between them is same as they are ordered
@@ -64,6 +65,11 @@ class BatchedInterchange:
         :param batch_size:
         :param cache_interv_results:
         :param cache_base_results:
+        :param result_format: type of results to return
+        :param store_low_interventions: store all the low-level interventions
+            that are generated in `self.low_keys_to_interventions`
+        :param trace_realization_origins: whether to trace the origin of low
+            intervention values
         :param device:
         """
         self.low_model = low_model
@@ -96,6 +102,9 @@ class BatchedInterchange:
             self.ignored_low_nodes |= set(ignored_low_nodes)
 
         self.result_format = result_format
+        self.store_low_interventions = store_low_interventions
+        self.trace_realization_origins = trace_realization_origins
+
         self.high_keys_to_interventions = {ivn.keys: ivn for ivn in high_interventions}
         self.low_keys_to_interventions = {}
 
@@ -149,6 +158,7 @@ class BatchedInterchange:
         icd_dataloader = icd.get_dataloader(batch_size=self.batch_size, shuffle=False)
 
         batched = self.batch_size > 1
+
         results = {}
         iteration = 0
         while True:
@@ -173,14 +183,11 @@ class BatchedInterchange:
                     low_base_res, low_ivn_res = self.low_model.intervene_all_nodes(low_intervention)
 
                     if not high_intervention.is_empty():
-                        if self.result_format == "verbose":
-                            self._add_verbose_results(
-                                results, high_intervention, low_intervention,
+                        self._add_results(
+                            results, high_intervention, low_intervention,
                                 high_base_res, high_ivn_res, low_base_res, low_ivn_res,
                                 actual_batch_size
-                            )
-                        else:
-                            raise NotImplementedError(f"Unsupported result format {self.result_format}")
+                        )
 
                     realizations, num_new_realizations = \
                         self._create_new_realizations(
@@ -200,20 +207,33 @@ class BatchedInterchange:
 
         return results
 
-    def _add_verbose_results(self, results: Dict, high_ivn: Intervention, low_ivn: Intervention,
-                             high_base_res: Dict[str, Any], high_ivn_res: Dict[str, Any],
-                             low_base_res: Dict[str, Any], low_ivn_res: Dict[str, Any],
-                             actual_batch_size: int):
+    def _add_results(self, results: Dict, high_ivn: Intervention, low_ivn: Intervention,
+                     high_base_res: Dict[str, Any], high_ivn_res: Dict[str, Any],
+                     low_base_res: Dict[str, Any], low_ivn_res: Dict[str, Any],
+                     actual_batch_size: int):
         low_root = self.low_model.root.name
         high_root = self.high_model.root.name
-        _hi_base_res, _hi_ivn_res = high_base_res[high_root], high_ivn_res[high_root]
-        _lo_base_res, _lo_ivn_res = low_base_res[low_root], low_ivn_res[low_root]
+        hi_base_res, hi_ivn_res = high_base_res[high_root], high_ivn_res[high_root]
+        lo_base_res, lo_ivn_res = low_base_res[low_root], low_ivn_res[low_root]
 
         for i in range(actual_batch_size):
             key = (low_ivn.keys[i], high_ivn.keys[i])
-            _hi_res = utils.idx_by_dim(_hi_ivn_res, i, high_ivn.batch_dim)
-            _lo_res = utils.idx_by_dim(_lo_ivn_res, i, low_ivn.batch_dim)
-            results[key] = (_hi_res == _lo_res)
+            if self.result_format == "simple":
+                _hi_res = utils.idx_by_dim(hi_ivn_res, i, high_ivn.batch_dim)
+                _lo_res = utils.idx_by_dim(lo_ivn_res, i, low_ivn.batch_dim)
+                results[key] = (_hi_res == _lo_res)
+            elif self.result_format == "equality":
+                _hi_base_res = utils.idx_by_dim(hi_base_res, i, high_ivn.batch_dim)
+                _hi_ivn_res = utils.idx_by_dim(hi_ivn_res, i, high_ivn.batch_dim)
+                _lo_base_res = utils.idx_by_dim(lo_base_res, i, low_ivn.batch_dim)
+                _lo_ivn_res = utils.idx_by_dim(lo_ivn_res, i, low_ivn.batch_dim)
+                d = {
+                    "base_eq": _hi_base_res == _lo_base_res,
+                    "ivn_eq": _hi_ivn_res == _lo_ivn_res,
+                    "low_base_eq_ivn": _lo_base_res == _lo_ivn_res,
+                    "high_base_eq_ivn": _hi_base_res == _hi_ivn_res
+                }
+                results[key] = d
 
     def _create_new_realizations(self, icd: "InterchangeDataset",
                                  high_ivn_batch: Intervention, low_ivn_batch: Intervention,
@@ -225,9 +245,8 @@ class BatchedInterchange:
         # print("--- Creating new rzns")
 
         # TODO: Keep track of where the interventions came from
-        trace_origins = self.result_format == "verbose"
         origins = [self.low_keys_to_interventions[low_ivn_batch.keys[i]] \
-                   for i in range(actual_batch_size)] if trace_origins else None
+                   for i in range(actual_batch_size)] if self.trace_realization_origins else None
 
         for high_node, high_values in high_ivn_res.items():
             if high_node not in self.high_intervention_range:
@@ -373,7 +392,7 @@ class InterchangeDataset(IterableDataset):
 
     def _prepare_rzn_to_yield(self, low_base, high_intervention, rzn):
         low_intervention = Intervention.from_realization(low_base, rzn)
-        if self.ca.result_format == "verbose":
+        if self.ca.store_low_interventions:
             self.ca.low_keys_to_interventions[low_intervention.keys] = low_intervention
         return {
             "low_intervention": low_intervention,

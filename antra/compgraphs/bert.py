@@ -57,8 +57,8 @@ def generate_bert_compgraph(bert_model, final_node="pool"):
     # output_hidden_states = GraphNode.default_leaf("output_hidden_states")
     #
     kwarg_names = ["input_ids", "attention_mask", "token_type_ids",
-                    "position_ids", "head_mask", "inputs_embeds",
-                    "output_attentions", "output_hidden_states",
+                    "position_ids", "inputs_embeds",
+                    "head_mask", "output_attentions", "output_hidden_states",
                     "return_dict", "encoder_hidden_states",
                     "encoder_attention_mask"]
     input_leaves = [GraphNode.leaf(name=name, use_default=True, default_value=None) for name in kwarg_names]
@@ -166,6 +166,10 @@ class BertGraphInput(GraphInput):
             batched=True,
             batch_dim=0,
             key_leaves=["input_ids"],
+            non_batch_leaves=["head_mask", "output_attentions",
+                              "output_hidden_states",
+                              "return_dict", "encoder_hidden_states",
+                              "encoder_attention_mask"],
             cache_results=cache_results
         )
 
