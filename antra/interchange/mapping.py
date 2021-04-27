@@ -1,5 +1,7 @@
 import copy
+import torch
 import itertools
+from antra import LOC
 from antra import *
 
 
@@ -24,7 +26,7 @@ def get_nodes_and_dependencies(graph: ComputationGraph):
 def get_indices(node: NodeName,
                 nodes_to_indices: Dict[NodeName, List[LocationType]]):
     if nodes_to_indices:
-        indices = nodes_to_indices.get(node, [None])
+        indices = nodes_to_indices.get(node, [])
     else:
         indices = [None]
         # length = None
@@ -91,7 +93,27 @@ def create_possible_mappings(
         def remove_high_node(self):
             self.high_nodes = self.high_nodes[1:]
 
-        def compatible_splits(self,split1, split2):
+        def compatible_splits(self,split1: LocationType, split2:LocationType):
+            big_number = 1000
+            big_list = torch.tensor([[_ for _ in range(big_number)]])
+            if isinstance(split1,list):
+                list1 = []
+                for split in split1:
+                    list1 += big_list[split]
+            elif split1 is not None:
+                list1 = big_list[split1]
+            else:
+                list1 = copy.copy(big_list)
+            if isinstance(split2,list):
+                list2 = []
+                for split in split2:
+                    list2 += big_list[split]
+            elif split2 is not None:
+                list2 = big_list[split2]
+            else:
+                list2 = copy.copy(big_list)
+            if len(set([int(i) for j in range(len(list1)) for i in list1[j]]).intersection(set([int(i) for j in range(len(list2)) for i in list2[j]]))) == 0:
+                return True
             return False
 
         def compatible_location(self, location):

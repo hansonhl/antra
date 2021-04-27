@@ -33,6 +33,6 @@ def generate_MLP_compgraph(MLP, activation, output_function = lambda x:x):
     elif MLP.out_activation_ == "logistic":
         output = GraphNode(curr_node,name="output",forward=sigmoid)
     elif MLP.out_activation_ == "softmax":
-        output = GraphNode(curr_node,name="outputt",forward=lambda x: softmax(x,dim=0))
+        output = GraphNode(curr_node,name="output",forward=lambda x: softmax(x,dim=0))
     root = GraphNode(output,name="root",forward=output_function)
     return ComputationGraph(root)
