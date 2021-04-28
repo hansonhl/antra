@@ -27,6 +27,7 @@ RealizationRecord = Dict[Tuple[HighNodeName, SerializedType], Set[SerializedReal
 
 
 class BatchedInterchange:
+    accepted_result_format = ["simple", "equality"]
     def __init__(
             self,
             low_model: ComputationGraph,
@@ -72,6 +73,9 @@ class BatchedInterchange:
             intervention values
         :param device:
         """
+        if result_format not in BatchedInterchange.accepted_result_format:
+            raise ValueError(f"Incorrect result format '{result_format}'. "
+                             f"Must be in {BatchedInterchange.accepted_result_format}.")
         self.low_model = low_model
         self.high_model = high_model
         self.low_inputs = low_inputs
@@ -151,7 +155,7 @@ class BatchedInterchange:
             results.append((self.test_mapping(mapping), mapping))
         return results
 
-    def test_mapping(self, mapping: AbstractionMapping):
+    def test_mapping(self, mapping: AbstractionMapping) -> Dict[Tuple[SerializedType, SerializedType], Any]:
         self.curr_mapping: AbstractionMapping = mapping
 
         icd = InterchangeDataset(mapping, self, collate_fn=self.collate_fn)
@@ -175,6 +179,10 @@ class BatchedInterchange:
 
                     low_intervention = minibatch["low_intervention"]
                     high_intervention = minibatch["high_intervention"]
+                    # print("low interv")
+                    # print(low_intervention.base)
+                    # print("high interv")
+                    # pprint(high_intervention.base)
 
                     actual_batch_size = low_intervention.get_batch_size()
                     num_interventions += actual_batch_size
@@ -197,6 +205,8 @@ class BatchedInterchange:
                     total_new_realizations += num_new_realizations
                     merge_realization_mappings(new_realizations, realizations)
 
+            print(f"Got {total_new_realizations} new realizations")
+            # print(new_realizations)
             if iteration == 0:
                 icd.did_empty_interventions = True
             iteration += 1
@@ -234,6 +244,8 @@ class BatchedInterchange:
                     "high_base_eq_ivn": _hi_base_res == _hi_ivn_res
                 }
                 results[key] = d
+            else:
+                raise ValueError(f"Invalid result_format: {self.result_format}")
 
     def _create_new_realizations(self, icd: "InterchangeDataset",
                                  high_ivn_batch: Intervention, low_ivn_batch: Intervention,
