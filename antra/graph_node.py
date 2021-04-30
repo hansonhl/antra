@@ -1,11 +1,10 @@
 import importlib
 
-import antra
 from .intervention import Intervention
 from .graph_input import GraphInput
 from .utils import copy_helper
 
-from typing import Union, Callable, Dict, Any
+from typing import *
 
 if importlib.util.find_spec("torch"):
     import antra.torch_utils as torch_utils
@@ -86,16 +85,16 @@ class GraphNode:
                    use_default=True, default_value=default_value)
 
     @property
-    def children(self):
+    def children(self) -> List["GraphNode"]:
         return self._children
 
     @children.setter
-    def children(self, values):
+    def children(self, values: List["GraphNode"]):
         self._children = list(values)
         self._children_dict = {c.name: c for c in self._children}
 
     @property
-    def children_dict(self):
+    def children_dict(self) -> Dict[str, "GraphNode"]:
         if hasattr(self, "_children_dict"):
             return self._children_dict
         else:
@@ -142,10 +141,14 @@ class GraphNode:
                 output_device_dict[inputs.keys] = result.device
             cache[inputs.keys] = result_for_cache
 
-    def compute(self, inputs: Union[GraphInput, Intervention]):
+    def compute(self, inputs: Union[GraphInput, Intervention],
+                res_dict: Optional[Dict[str, Any]]=None):
         """Compute the output of a node
 
         :param inputs: Can be a GraphInput object or an Intervention object
+        :param res_dict: Dict to gather the output of all the nodes during one
+            run of a computation or intervention, it also serves as a temporary
+            cache that lasts for one run
         :return: result of forward function
         """
         # check if intervention is happening in this run
@@ -159,71 +162,60 @@ class GraphNode:
                                    "a graph before intervening")
             is_affected = self.name in intervention.affected_nodes
 
-        result = self._get_from_cache(intervention if is_affected else inputs,
-                                      is_affected)
-
-        if result is not None:
-            return result
+        result = None
+        if res_dict is not None and self.name in res_dict:
+            result = res_dict[self.name]
         else:
+            cache_input = intervention if is_affected else inputs
+            result = self._get_from_cache(cache_input, is_affected)
+
+        if result is None:
+            # Did not get a result from cache or res_dict -- run forward()
             if len(self.children) == 0:
                 # leaf node
                 if self.name in inputs:
                     result = self.forward(inputs[self.name])
+                elif self.use_default:
+                    return self.default_value
                 else:
-                    if self.use_default:
-                        return self.default_value
-                    else:
-                        raise RuntimeError(f"Input value not given for leaf node {self.name}!")
+                    raise RuntimeError(f"Input value not given in for leaf node {self.name}!")
             else:
                 # non-leaf node
                 children_res = []
                 for child in self.children:
-                    child_res = child.compute(inputs if intervention is None else intervention)
+                    compute_input = inputs if intervention is None else intervention
+                    child_res = child.compute(compute_input, res_dict=res_dict)
                     children_res.append(child_res)
                 result = self.forward(*children_res)
 
+            # Do intervention on the results from forward(), if necessary
             if intervention and self.name in intervention.intervention:
                 if self.name in intervention.location:
                     # intervene a specific location in a vector/tensor
-                    # result = self.base_cache.get(inputs, None)
-                    # if not self.cache_results:
-                    #     raise RuntimeError(f"Cannot intervene on node {self.name} "
-                    #                        f"because its results are not cached")
-                    # children_affected = any(c in intervention.affected_nodes for c in self.children_dict.keys())
-                    # print(f"{self.name} has affected children?", children_affected)
-                    # if children_affected:
-                    #     if not intervention.cache_results:
-                    #         raise RuntimeError(f"Cannot intervene on {self.name}, unable to retrieve cached values of its children"
-                    #                            f"because intervention.cache_results is False")
-                    #     result = self._get_from_cache(intervention, from_interv=True)
-                    # else:
-                    #     result = self._get_from_cache(inputs, from_interv=False)
-                    #
-                    # if result is None:
-                    #     raise RuntimeError(
-                    #         f"Must compute unintervened value of \"{self.name}\" once "
-                    #         "before intervening (base: %s, intervention: %s)"
-                    #         % (intervention.base, intervention.intervention))
-                    # result = copy_helper(result)
                     locations = intervention.location[self.name]
                     interv_values = intervention.intervention[self.name]
-                    if isinstance(locations, list):
+                    if isinstance(locations, list): # multi-loc intervention
                         for idx, value in zip(locations, interv_values):
                             result[idx] = value
-                    else:
+                    else: # single-loc intervention
                         result[locations] = interv_values
                 else:
                     # replace the whole tensor
                     result = intervention.intervention[self.name]
-                # if len(self.children) != 0:
-                #     for child in self.children:
-                #         child_res = child.compute(
-                #             inputs if intervention is None else intervention)
 
-            self._save_to_cache(intervention if is_affected else inputs,
-                                result, is_affected)
+            cache_input = intervention if is_affected else inputs
+            self._save_to_cache(cache_input, result, is_affected)
 
-            return result
+        elif res_dict is not None:
+            # even if result is not None, i.e. we got a result either from the
+            #  cache or res_dict, we still visit child nodes to fill up the res_dict
+            compute_input = inputs if intervention is None else intervention
+            for child in self.children:
+                child.compute(compute_input, res_dict)
+
+        if res_dict is not None:
+            res_dict[self.name] = result
+        return result
 
     def clear_caches(self, inputs: Union[GraphInput, Intervention, None]=None):
         """Clear all caches or the cache records of a specific input"""

@@ -72,21 +72,25 @@ class ComputationGraph:
         :param inputs:
         :return:
         """
-        no_caching = not inputs.cache_results
-        if no_caching:
-            inputs.cache_results = True
-
-        res_dict = {self.root.name: self.root.compute(inputs)}
-
-        for node_name, node in self.nodes.items():
-            if node_name != self.root.name:
-                res_dict[node_name] = node.compute(inputs)
-
-        if no_caching:
-            self.clear_caches(inputs)
-            inputs.cache_results = False
-
+        res_dict = {}
+        self.root.compute(inputs, res_dict=res_dict)
         return res_dict
+
+        # no_caching = not inputs.cache_results
+        # if no_caching:
+        #     inputs.cache_results = True
+        #
+        # res_dict = {self.root.name: self.root.compute(inputs)}
+        #
+        # for node_name, node in self.nodes.items():
+        #     if node_name != self.root.name:
+        #         res_dict[node_name] = node.compute(inputs)
+        #
+        # if no_caching:
+        #     self.clear_caches(inputs)
+        #     inputs.cache_results = False
+        #
+        # return res_dict
 
     def _iterative_compute(self, inputs: GraphInput):
         """
@@ -118,8 +122,6 @@ class ComputationGraph:
     def intervene_all_nodes(self, intervention: Intervention) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """ Get the output for every node after an intervention in the graph.
 
-        This will temporarily force the graph to cache the results of the inputs.
-
         :param inputs:
         :return:
         """
@@ -128,21 +130,23 @@ class ComputationGraph:
         self._validate_interv(intervention)
         intervention.find_affected_nodes(self)
 
-        no_caching = not intervention.cache_results
-        if no_caching:
-            intervention.cache_results = True
+        ivn_res_dict = {}
+        self.root.compute(intervention, ivn_res_dict)
+        return base_res_dict, ivn_res_dict
 
-        res_dict = {self.root.name: self.root.compute(intervention)}
-
-        for node_name, node in self.nodes.items():
-            if node_name != self.root.name:
-                res_dict[node_name] = node.compute(intervention)
-
-        if no_caching:
-            self.clear_caches(intervention)
-            intervention.cache_results = False
-
-        return base_res_dict, res_dict
+        # no_caching = not intervention.cache_results
+        # if no_caching:
+        #     intervention.cache_results = True
+        #
+        # res_dict = {self.root.name: self.root.compute(intervention)}
+        #
+        # for node_name, node in self.nodes.items():
+        #     if node_name != self.root.name:
+        #         res_dict[node_name] = node.compute(intervention)
+        #
+        # if no_caching:
+        #     self.clear_caches(intervention)
+        #     intervention.cache_results = False
 
     def clear_caches(self, inputs: Union[GraphInput, Intervention, None]=None):
         """ Clear all caches, or clear a specified cache entry for a given input.

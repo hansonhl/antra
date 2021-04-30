@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from antra import ComputationGraph, GraphNode, GraphInput, Intervention, Location, LOC
 import itertools
 
+from pprint import pprint
 from .utils import setup_intervention, setup_intervention_func_for_fixture
 
 class TensorArithmeticGraphDim0(ComputationGraph):
@@ -332,6 +333,68 @@ def test_batch_one_interv_multi_locs(setup_multi_loc_batched_intervention):
         h1_before, h1_after = g.intervene_node("h1", batched_interv)
         a_before, a_after = g.intervene_node("add", batched_interv)
         r_before, r_after = g.intervene_node("relu", batched_interv)
+
+        eq_pairs = [(h1, h1_after), (h1, h1_before), (a_prime, a_after),
+                    (a, a_before), (r, r_before), (r_prime, r_after),
+                    (interv_res, interv_expected), (base_res, base_expected)]
+
+        for x, y in eq_pairs:
+            assert torch.allclose(x, y)
+
+
+# Only limited ways are allowed
+interv_construction_types = [("dict", "GraphInput"),
+                             ("dict",),
+                             ("dict", "interv_str",)]
+params = [t for t in itertools.product(*interv_construction_types)]
+params += [("dict", "set", "interv_str"), ("GraphInput", "set", "interv_str")]
+idfn = lambda t: "/".join(t)
+@pytest.fixture(params=params, ids=idfn)
+def setup_multi_loc_batched_intervention(request):
+    return setup_intervention_func_for_fixture(request)
+
+def test_batch_one_interv_multi_locs_intervene_all(setup_multi_loc_batched_intervention):
+    g = TensorArithmeticGraphDim0()
+    torch.manual_seed(39)
+    inputs1 = torch.randn(1000, 3)
+    inputs2 = torch.randn(1000, 3) * 2.
+    for i in range(0, 1000, batch_size):
+        input1 = inputs1[i:i+batch_size]
+        input2 = inputs2[i:i+batch_size]
+        interv1 = torch.ones(batch_size)
+        interv2 = torch.zeros(batch_size)
+
+        input_dict = {"leaf1": input1, "leaf2": input2}
+        interv_dict = {"h2": [interv1, interv2]}
+        loc_dict = {"h2": [LOC[:,0], LOC[:,2]]}
+
+        batched_interv = setup_multi_loc_batched_intervention(
+            input_dict, interv_dict, loc_dict, batched=True, batch_dim=0)
+
+        base_res, interv_res = g.intervene(batched_interv)
+
+        h1 = g.h1_func(input1)
+        h2 = g.h2_func(input2)
+        a = g.add_func(h1, h2)
+        r = g.relu_func(a)
+        base_expected = g.root_func(r)
+
+        h2_after = h2.detach().clone()
+        h2_after[:,0] = interv1
+        h2_after[:,2] = interv2
+        a_prime = g.add_func(h1, h2_after)
+        r_prime = g.relu_func(a_prime)
+        interv_expected = g.root_func(r_prime)
+
+        base_res_dict, ivn_res_dict = g.intervene_all_nodes(batched_interv)
+
+        # pprint(base_res_dict)
+        # pprint(ivn_res_dict)
+        # break
+
+        h1_before, h1_after = base_res_dict["h1"], ivn_res_dict["h1"]
+        a_before, a_after = base_res_dict["add"], ivn_res_dict["add"]
+        r_before, r_after = base_res_dict["relu"], ivn_res_dict["relu"]
 
         eq_pairs = [(h1, h1_after), (h1, h1_before), (a_prime, a_after),
                     (a, a_before), (r, r_before), (r_prime, r_after),
