@@ -196,3 +196,11 @@ class ComputationGraph:
 
     def set_state_dict(self, d):
         pass
+
+    @property
+    def model(self) -> "torch.nn.Module":
+        return self._model
+
+    @model.setter
+    def model(self, model: "torch.nn.Module"):
+        self._model = model

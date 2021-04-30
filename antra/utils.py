@@ -88,8 +88,13 @@ def serialize_batch(d: Dict[str, Any], dim: int) -> List[Tuple]:
     return [tuple(sorted((k, serialize(a)) for k, a in zip(d.keys(), x)))
             for x in zip(*split_values)]
 
-# TODO: test this function
+
 def idx_by_dim(x: Any, idx: int, dim: int):
+    """Index into a tensor at a given dimension
+    e.g. x = torch.tensor([[2,3,4], [13,14,15]])
+    idx_by_dim(x, 1, 1) returns [3, 14]
+    idx_by_dim(x, 0, 1) returns [13, 14, 15]
+    """
     if is_torch_tensor(x) or is_numpy_array(x):
         if dim == 0:
             return x[idx]

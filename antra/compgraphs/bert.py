@@ -173,6 +173,7 @@ class BertGraphInput(GraphInput):
             cache_results=cache_results
         )
 
+
 class BertModelCompGraph(ComputationGraph):
     def __init__(self, bert_model, final_node="pool"):
         self.bert_model = bert_model

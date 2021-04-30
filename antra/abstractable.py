@@ -23,7 +23,7 @@ class AbstractableCompGraph(ComputationGraph):
 
         :param graph:
         :param abstract_nodes: Names of intermediate nodes that we would like
-            to keep, while abstracting away all other nodes, apart from
+            to keep, while abstracting away all other nodes
         """
         self._parent2children = {
             node_name: [c.name for c in node.children]
