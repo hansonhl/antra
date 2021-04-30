@@ -198,7 +198,8 @@ def test_mapping_generation():
         high_interventions=high_ivns,
         low_nodes_to_indices=low_nodes_to_indices,
         fixed_node_mapping=fixed_node_mapping,
-        result_format="verbose",
+        store_low_interventions=True,
+        result_format="simple",
         batch_size=12,
     )
 

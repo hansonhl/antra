@@ -1,4 +1,4 @@
-from datasets import EqualityDataset, PremackDataset, PremackDatasetLeafFlattened
+from .datasets import EqualityDataset, PremackDataset, PremackDatasetLeafFlattened
 from itertools import product
 import numpy as np
 import os

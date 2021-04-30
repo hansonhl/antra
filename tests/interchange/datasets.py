@@ -1,6 +1,6 @@
 import numpy as np
 import random
-from utils import randvec
+from tests.interchange.utils import randvec
 
 
 

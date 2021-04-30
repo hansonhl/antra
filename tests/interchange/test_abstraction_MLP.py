@@ -4,12 +4,12 @@
 # In[ ]:
 
 
-from datasets import PremackDataset
-from equality_experiment import EqualityExperiment
+from .datasets import PremackDataset
+from .equality_experiment import EqualityExperiment
 import os
 from pprint import pprint 
 from antra import *
-import utils
+import tests.interchange.utils as utils
 import torch
 from torch.nn import ReLU
 from antra.interchange.batched import BatchedInterchange

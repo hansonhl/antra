@@ -2,7 +2,7 @@ from itertools import product
 from pprint import pprint
 
 from antra import *
-from antra.interchange.abstraction import CausalAbstraction
+from antra.interchange import BatchedInterchange
 from antra.location import location_to_str, reduce_dim
 
 import torch
@@ -161,7 +161,6 @@ def test_mapping_generation():
             "leaf1": torch.tensor(a),
             "leaf2": torch.tensor(b),
             "leaf3": torch.tensor(c),
-            "leaf3": torch.tensor(d),
         }) for (a, b, c) in product((-1., 1.), repeat=3)
     ]
 
@@ -190,7 +189,7 @@ def test_mapping_generation():
         "hidden1": [LOC[:,0] , LOC[:, 1], LOC[:, 2], LOC[:,:1], LOC[:,1:], None]
     }
 
-    ca = CausalAbstraction(
+    ca = BatchedInterchange(
         low_model=low_model,
         high_model=high_model,
         low_inputs=low_inputs,
@@ -198,7 +197,8 @@ def test_mapping_generation():
         high_interventions=high_ivns,
         low_nodes_to_indices=low_nodes_to_indices,
         fixed_node_mapping=fixed_node_mapping,
-        result_format="verbose",
+        store_low_interventions=True,
+        result_format="simple",
         batch_size=12,
     )
 
@@ -249,7 +249,7 @@ def test_abstraction_medium():
         "hidden1": [LOC[:,0] , LOC[:, 1], LOC[:, 2], LOC[:,:2], LOC[:,1:], LOC[:, :]]
     }
 
-    ca = CausalAbstraction(
+    ca = BatchedInterchange(
         low_model=low_model,
         high_model=high_model,
         low_inputs=low_inputs,
@@ -257,7 +257,8 @@ def test_abstraction_medium():
         high_interventions=high_ivns,
         low_nodes_to_indices=low_nodes_to_indices,
         fixed_node_mapping=fixed_node_mapping,
-        result_format="verbose",
+        store_low_interventions=True,
+        result_format="simple",
         batch_size=12,
     )
 
