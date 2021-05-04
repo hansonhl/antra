@@ -341,23 +341,23 @@ class Intervention:
                             batch_dim=self.batch_dim)
 
     def __repr__(self, shorten=True):
-	ivn = None
-	# shorten outputs when bert layers are involved
-	if shorten:
-	    try:
-		if 'bert' in self.intervention.keys[0][0]:
-		    ivn = f'{self.intervention.keys[0][0]} ... (hidden omitted)'
-	    except: pass
-	    try:
-		if 'bert' in self.intervention.keys[0][0][0]:
-		    ivn = f'{self.intervention.keys[0][0][0]} ... (hidden omitted)'
-	    except: pass
-	# otherwise, we just do the default
-	if ivn is None:
-	    ivn = self.intervention.keys
-        repr_dict = {
-            "base": self.base.keys,
-	    "interv": ivn,
-            "locs": self.location
-        }
-        return pprint.pformat(repr_dict, indent=1, compact=True)
+        ivn = None
+        # shorten outputs when bert layers are involved
+        if shorten:
+            try:
+                if 'bert' in self.intervention.keys[0][0]:
+                    ivn = f'{self.intervention.keys[0][0]} ... (hidden omitted)'
+            except: pass
+            try:
+                if 'bert' in self.intervention.keys[0][0][0]:
+                    ivn = f'{self.intervention.keys[0][0][0]} ... (hidden omitted)'
+            except: pass
+        # otherwise, we just do the default
+        if ivn is None:
+            ivn = self.intervention.keys
+            repr_dict = {
+                "base": self.base.keys,
+            "interv": ivn,
+                "locs": self.location
+            }
+            return pprint.pformat(repr_dict, indent=1, compact=True)

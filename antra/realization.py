@@ -21,7 +21,7 @@ class Realization:
     @classmethod
     def deserialize(cls, ser_rzn: SerializedRealization):
         pass
-        
+
     @property
     def data(self):
         return self._data
