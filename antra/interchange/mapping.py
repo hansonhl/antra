@@ -9,6 +9,9 @@ from typing import *
 
 NodeName = str
 AbstractionMapping = Dict[NodeName, Dict[NodeName, LocationType]]
+# e.g.
+# high_node_x : {low_node1: [loc1],
+#               low_node2: [loc2, loc3]}}
 
 def get_nodes_and_dependencies(graph: ComputationGraph):
         nodes = [node_name for node_name in graph.nodes]
@@ -26,7 +29,7 @@ def get_nodes_and_dependencies(graph: ComputationGraph):
 def get_indices(node: NodeName,
                 nodes_to_indices: Dict[NodeName, List[LocationType]]):
     if nodes_to_indices:
-        indices = nodes_to_indices.get(node, [])
+	indices = nodes_to_indices.get(node, [])
     else:
         indices = [None]
         # length = None
@@ -77,6 +80,11 @@ def create_possible_mappings(
         nodes_to_indices: Optional[Dict[NodeName, List[LocationType]]]=None) \
         -> List[AbstractionMapping]:
     """
+    Go through all high level nodes, then all low level locations to assign them and then
+	create all possible mappings
+
+    Construct partial certs for mapping, then a full cert
+
     :param low_model:
     :param high_model:
     :param fixed_assignments: dict: str name of highlevel node -> (dict: name of low level node -> locations)

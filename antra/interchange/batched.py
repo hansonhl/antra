@@ -2,7 +2,6 @@ import copy
 # from antra.utils import serialize, is_serialized, idx_by_dim, SerializedType
 import logging
 from collections import defaultdict
-from pprint import pprint
 from typing import *
 
 import numpy as np
@@ -21,6 +20,11 @@ LowNodeName = NodeName
 
 # SerializedRealization=Tuple[Tuple[Tuple[LowNodeName, location.SerializedLocationType], SerializedType], ...]
 # Realization = Dict[Tuple[LowNodeName, location.SerializedLocationType], Any]
+
+# first tuple is a key
+# serializedtype is the value of the high node
+# list relaizations - all possible low node values that could correspond to this high node value
+# e.g. a=1, and a maps to low node x, then these are all the values of x that are observed
 RealizationMapping = Dict[Tuple[HighNodeName, SerializedType], List[Realization]]
 RealizationRecord = Dict[Tuple[HighNodeName, SerializedType], Set[SerializedRealization]]
 
@@ -59,15 +63,22 @@ class BatchedInterchange:
         """
         :param low_model:
         :param high_model:
-        :param low_inputs:
+	:param low_inputs:  low and high inputs must be aligned and of the same length
         :param high_inputs:
-        :param high_interventions:
-        :param fixed_node_mapping:
+	:param high_interventions:  for a given high input, which high node to we intervene on (with
+	    all the possible values)
+	:param fixed_node_mapping:  mapping from high nodes to low indices to omit from intervention
+	:param result_format: type of results to return, e.g. "counts"
+	    current - verbose (i.e. print what happens)
+	    counts - how many times did it succeed (not yet implemented)
         :param high_to_low_keys: A mapping from high- to low-level model
             inputs. By default, assume `low_inputs` and `high_inputs` are the
             same length and the mapping between them is same as they are ordered
             in the list.
-        :param ignored_low_nodes:
+
+	    If not given, then assumes that low and high inputs are aligned and generates mapping
+	    from them
+	:param ignored_low_nodes: (maybe will be removed?)
         :param low_nodes_to_indices: A mapping from low node names to a list of
             all the possible indices (LOCs) in that low node to intervene on
         :param batch_dim:
@@ -96,6 +107,7 @@ class BatchedInterchange:
 
         self.high_intervention_range = self._get_high_intervention_range(high_interventions)
 
+	# returns list of abstraction mapping type; just the mapping
         self.mappings = create_possible_mappings(
             low_model, high_model, fixed_node_mapping, ignored_low_nodes,
             low_nodes_to_indices
@@ -166,6 +178,11 @@ class BatchedInterchange:
 
     @torch.no_grad()
     def find_abstractions(self):
+	"""
+	For every AbstractionMapping (high node to low intervention locations),
+	    produce all possible exchanges of low level inputs/ values to test
+	    the hypothesis that the high node is an abstraction of that set of low level locations
+	"""
         results = []
         for mapping in self.mappings:
             results.append((self.test_mapping(mapping), mapping))
@@ -176,17 +193,24 @@ class BatchedInterchange:
 	"""
 	Turn a single AbstractionMapping into all possible exchanges for that mapping
 	"""
-        self.curr_mapping: AbstractionMapping = mapping
+	self.curr_mapping: AbstractionMapping = mapping
 
-        icd = InterchangeDataset(mapping, self, collate_fn=self.collate_fn)
-        icd_dataloader = icd.get_dataloader(batch_size=self.batch_size, shuffle=False)
+	icd = InterchangeDataset(mapping, self, collate_fn=self.collate_fn)
+
+	# produce the actual interventions
+	# i.e. lists of batched interventions
+	icd_dataloader = icd.get_dataloader(batch_size=self.batch_size, shuffle=False)
 
 	results = {}  # this accumulates all results
 	# dict of Tuple[keys] -> dict, usually
-        iteration = 0
-        while True:
-            # print(f"======== iteration {iteration} ========")
-            new_realizations: RealizationMapping = {}
+	iteration = 0
+
+	# runs twice for one single intervention
+	# first run -> collect all basic inputs
+	# second run -> use intermediate outputs from first run to construct new interventions
+	while True:
+	    # print(f"======== iteration {iteration} ========")
+	    new_realizations: RealizationMapping = {}
             total_new_realizations = 0
             num_interventions = 0
 	    results_total = 0
@@ -195,10 +219,17 @@ class BatchedInterchange:
 		assert allow_multi_iteration, f'Loop will run more than 2 total iterations. This should happen only' \
 					      f'if intervening on multiple high level nodes simultaneously'
 	    for batch in tqdm(icd_dataloader):
-                # batch is a list of dicts, each dict contains a batched low and high intervention
-                for minibatch in batch:
-                    minibatch = {k: v.to(self.device) \
-                        if isinstance(v, (torch.Tensor, Intervention, GraphInput)) else v
+		# batch is a list of dicts, each dict contains a batched low and high intervention
+		# list of batched interventions
+		# a batched intervention can be at only one single location
+		# batch size of 20 - 10 intervene LOC1 and 10 intervene LOC2
+		# needed because of complexity of injecting changes into the network
+
+		# realizations are instantiations of low nodes with values
+		# collect low node values and make interventions with them
+		for minibatch in batch:
+		    minibatch = {k: v.to(self.device) \
+			if isinstance(v, (torch.Tensor, Intervention, GraphInput)) else v
 				 for k, v in minibatch.items()}
 
                     low_intervention = minibatch["low_intervention"]
@@ -207,9 +238,10 @@ class BatchedInterchange:
                     actual_batch_size = low_intervention.get_batch_size()
                     num_interventions += actual_batch_size
 
-                    high_base_res, high_ivn_res = self.high_model.intervene_all_nodes(high_intervention)
+		    high_base_res, high_ivn_res = self.high_model.intervene_all_nodes(high_intervention)
 		    low_base_res, low_ivn_res = self.low_model.intervene_all_nodes(low_intervention)
 
+		    # second iteration
 		    if not high_intervention.is_empty():
 			new_results_ct = self._add_results(
 			    results, high_intervention, low_intervention,
@@ -218,9 +250,13 @@ class BatchedInterchange:
 			)
 			results_total += new_results_ct
 
+		    # a realization is the corresponding values for low node (i.e. low node positions to low values)
+		    # as in, the ones we're going to substitute
+
+		    # key (bert_layer_0, location (0,0)) => val == hidden tensor there
 		    realizations, num_new_realizations = \
 			self._create_new_realizations(
-                            icd, high_intervention, low_intervention,
+			    icd, high_intervention, low_intervention,
                             high_ivn_res, low_ivn_res, actual_batch_size)
 
                     total_new_realizations += num_new_realizations
@@ -705,7 +741,3 @@ def batchify(input_lists, batch_dim, multi_loc_nodes, non_batch_inputs=None):
 		raise RuntimeError(
 		    f"Currently does not support automatically batchifying inputs with type {type(one_val)} for node `{key}`")
     return input_dict
-
-
-def bert_input_collate_fn(batch):
-    pass
