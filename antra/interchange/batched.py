@@ -13,8 +13,8 @@ import antra.location as location
 import antra.utils as utils
 from antra.realization import Realization, SerializedRealization
 from antra.interchange.mapping import create_possible_mappings, AbstractionMapping
-# from antra.utils import serialize, is_serialized, idx_by_dim, SerializedType
 
+# from antra.utils import serialize, is_serialized, idx_by_dim, SerializedType
 
 
 HighNodeName = NodeName
@@ -28,25 +28,26 @@ RealizationRecord = Dict[Tuple[HighNodeName, SerializedType], Set[SerializedReal
 
 class BatchedInterchange:
     accepted_result_format = ["simple", "equality"]
+
     def __init__(
-            self,
-            low_model: ComputationGraph,
-            high_model: ComputationGraph,
-            low_inputs: Sequence[GraphInput],
-            high_inputs: Sequence[GraphInput],
-            high_interventions: Sequence[Intervention],
-            fixed_node_mapping: AbstractionMapping,
-            high_to_low_keys: Optional[Dict[SerializedType, SerializedType]]=None,
-            ignored_low_nodes: Optional[Sequence[str]]=None,
-            low_nodes_to_indices: Optional[Dict[LowNodeName, List[LocationType]]]=None,
-            batch_dim: int = 0,
-            batch_size: int = 1,
-            cache_interv_results: bool = False,
-            cache_base_results: bool = True,
-            result_format: str = "equality",
-            store_low_interventions: bool = False,
-            trace_realization_origins: bool = False,
-            device: Optional[torch.device] = None
+	self,
+	low_model: ComputationGraph,
+	high_model: ComputationGraph,
+	low_inputs: Sequence[GraphInput],
+	high_inputs: Sequence[GraphInput],
+	high_interventions: Sequence[Intervention],
+	fixed_node_mapping: AbstractionMapping,
+	high_to_low_keys: Optional[Dict[SerializedType, SerializedType]] = None,
+	ignored_low_nodes: Optional[Sequence[str]] = None,
+	low_nodes_to_indices: Optional[Dict[LowNodeName, List[LocationType]]] = None,
+	batch_dim: int = 0,
+	batch_size: int = 1,
+	cache_interv_results: bool = False,
+	cache_base_results: bool = True,
+	result_format: str = "equality",
+	store_low_interventions: bool = False,
+	trace_realization_origins: bool = False,
+	device: Optional[torch.device] = None
     ):
         """
         :param low_model:
@@ -83,7 +84,8 @@ class BatchedInterchange:
         self.high_interventions = high_interventions
 
         if not all(not interv.batched for interv in high_interventions):
-            raise ValueError("Does not support batched interventions for `high_interventions` in CausalAbstraction constructor")
+	    raise ValueError(
+		"Does not support batched interventions for `high_interventions` in CausalAbstraction constructor")
 
         self.high_intervention_range = self._get_high_intervention_range(high_interventions)
 
@@ -96,7 +98,7 @@ class BatchedInterchange:
         self.high_keys_to_inputs = {gi.keys: gi for gi in high_inputs}
         if not high_to_low_keys:
             assert len(low_inputs) == len(high_inputs)
-            high_to_low_keys = {hi.keys : lo.keys for lo, hi in zip(low_inputs, high_inputs)}
+	    high_to_low_keys = {hi.keys: lo.keys for lo, hi in zip(low_inputs, high_inputs)}
         self.high_to_low_input_keys = high_to_low_keys
         self.high_keys_to_low_inputs = {hi_key: self.low_keys_to_inputs[lo_key]
                                         for hi_key, lo_key in high_to_low_keys.items()}
@@ -112,7 +114,9 @@ class BatchedInterchange:
         self.high_keys_to_interventions = {ivn.keys: ivn for ivn in high_interventions}
         self.low_keys_to_interventions = {}
 
-        self._add_empty_interventions()
+	# base inputs without any interventions -> run first pass
+	# to get the realized values of all the low nodes we care about
+	self._add_empty_interventions()  # create an empy intervention for every high level intervention
 
         # following info used to set up batched interventions
         self.batch_dim = batch_dim
@@ -127,8 +131,8 @@ class BatchedInterchange:
 
         self.device = device if device is not None else torch.device("cpu")
 
-    def _get_high_intervention_range(self, high_interventions: Sequence[Intervention])\
-            -> Dict[HighNodeName, Set[SerializedType]]:
+    def _get_high_intervention_range(self, high_interventions: Sequence[Intervention]) \
+	-> Dict[HighNodeName, Set[SerializedType]]:
         interv_range = defaultdict(set)
         for interv in high_interventions:
             for high_node_name, val in interv.intervention._values.items():
@@ -175,7 +179,7 @@ class BatchedInterchange:
                 for minibatch in batch:
                     minibatch = {k: v.to(self.device) \
                         if isinstance(v, (torch.Tensor, Intervention, GraphInput)) else v
-                        for k, v in minibatch.items()}
+				 for k, v in minibatch.items()}
 
                     low_intervention = minibatch["low_intervention"]
                     high_intervention = minibatch["high_intervention"]
@@ -193,8 +197,8 @@ class BatchedInterchange:
                     if not high_intervention.is_empty():
                         self._add_results(
                             results, high_intervention, low_intervention,
-                                high_base_res, high_ivn_res, low_base_res, low_ivn_res,
-                                actual_batch_size
+			    high_base_res, high_ivn_res, low_base_res, low_ivn_res,
+			    actual_batch_size
                         )
 
                     realizations, num_new_realizations = \
@@ -354,8 +358,11 @@ class BatchedInterchange:
         return minibatches
 
 
-
 class InterchangeDataset(IterableDataset):
+    """
+    yields pairs of high level and low level interventions
+    """
+
     def __init__(self, mapping: AbstractionMapping, ca: BatchedInterchange,
                  collate_fn: Callable):
         super(InterchangeDataset, self).__init__()
@@ -364,8 +371,10 @@ class InterchangeDataset(IterableDataset):
         self.low_outputs = []
         self.high_outputs = []
         self.realization_record: RealizationRecord = defaultdict(set)
-        self.all_realizations: RealizationMapping = defaultdict(list) # Maps a high variable and value (V_H, v_H) to vectors of low-values
-        self.curr_realizations: RealizationMapping = defaultdict(list) # Maps a high variable and value (V_H, v_H) to vectors of low-values, but just the last round
+	self.all_realizations: RealizationMapping = defaultdict(
+	    list)  # Maps a high variable and value (V_H, v_H) to vectors of low-values
+	self.curr_realizations: RealizationMapping = defaultdict(
+	    list)  # Maps a high variable and value (V_H, v_H) to vectors of low-values, but just the last round
 
         self.mapping = mapping
         self.collate_fn = collate_fn
@@ -534,10 +543,10 @@ def merge_realization_mappings(current: RealizationMapping, other: RealizationMa
 
 
 def pack_interventions(
-        interventions: Sequence[Intervention],
-        batch_dim: int = 0,
-        non_batch_inputs: Optional[Sequence[str]] = None
-    ) -> Tuple[Dict, Dict, Dict]:
+    interventions: Sequence[Intervention],
+    batch_dim: int = 0,
+    non_batch_inputs: Optional[Sequence[str]] = None
+) -> Tuple[Dict, Dict, Dict]:
     """ Pack a sequence of individual interventions into one batched intervention.
     All interventions must be in the same nodes and locations.
 
@@ -593,18 +602,19 @@ def pack_interventions(
     if not all(len(l) == batch_size for l in base_lists.values()):
         for leaf, vals in base_lists.items():
             if len(vals) != batch_size:
-                raise RuntimeError(f"List of values for leaf `{leaf}` has shorter length ({len(vals)}) than batch size ({batch_size})")
+		raise RuntimeError(
+		    f"List of values for leaf `{leaf}` has shorter length ({len(vals)}) than batch size ({batch_size})")
 
     # make sure intervention values have equal length
     if not ivn_is_empty:
         for node, vals in ivn_lists.items():
             if node not in multi_loc_nodes:
                 if len(vals) != batch_size:
-                    raise RuntimeError(f"List of values for intervention at `{node}` has shorter length ({len(vals)}) than batch size ({batch_size})")
+		    raise RuntimeError(
+			f"List of values for intervention at `{node}` has shorter length ({len(vals)}) than batch size ({batch_size})")
             else:
                 if not all(len(vals[j]) == batch_size for j in range(len(vals))):
                     raise RuntimeError(f"Lists of values for multi-location intervention have inconsistent length")
-
 
     base_dict = batchify(base_lists, batch_dim, multi_loc_nodes, non_batch_inputs)
     ivn_dict = batchify(ivn_lists, batch_dim, multi_loc_nodes) if not ivn_is_empty else {}
@@ -627,7 +637,8 @@ def batchify(input_lists, batch_dim, multi_loc_nodes, non_batch_inputs=None):
                 elif utils.is_numpy_array(one_val):
                     input_dict[key].append(np.stack(_vals, axis=batch_dim))
                 else:
-                    raise RuntimeError(f"Currently does not support automatically batchifying inputs with type {type(one_val)} for node `{key}`")
+		    raise RuntimeError(
+			f"Currently does not support automatically batchifying inputs with type {type(one_val)} for node `{key}`")
         else:
             one_val = vals[0]
             if non_batch_inputs and key in non_batch_inputs:
@@ -637,7 +648,8 @@ def batchify(input_lists, batch_dim, multi_loc_nodes, non_batch_inputs=None):
             elif utils.is_numpy_array(one_val):
                 input_dict[key] = np.stack(vals, axis=batch_dim)
             else:
-                raise RuntimeError(f"Currently does not support automatically batchifying inputs with type {type(one_val)} for node `{key}`")
+		raise RuntimeError(
+		    f"Currently does not support automatically batchifying inputs with type {type(one_val)} for node `{key}`")
     return input_dict
 
 

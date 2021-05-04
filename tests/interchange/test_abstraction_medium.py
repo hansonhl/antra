@@ -224,7 +224,6 @@ def test_abstraction_medium():
             "leaf3": torch.tensor(c)
         }) for (a, b, c) in product((-1., 1.), repeat=3)
     ]
-
     high_inputs = [
         GraphInput({
             "leaf1": torch.tensor(a),
