@@ -169,7 +169,7 @@ def generate_bert_compgraph(bert_model, final_node="pool"):
 
 class BertGraphInput(GraphInput):
     def __init__(self,
-		 input_dict: BatchEncoding,
+		 input_dict,
 		 cache_results=True,
 		 batched=True):
 	# todo: keys unused; batched seems to have no effect
@@ -257,7 +257,6 @@ class BertForSequenceClassificationCompGraph(ComputationGraph):
             return self.cls(self.dropout(h))
 
         super().__init__(cls_head)
-
 
 
 class BertForTokenClassificationCompGraph(ComputationGraph):
