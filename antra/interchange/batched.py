@@ -21,8 +21,10 @@ LowNodeName = NodeName
 # SerializedRealization=Tuple[Tuple[Tuple[LowNodeName, location.SerializedLocationType], SerializedType], ...]
 # Realization = Dict[Tuple[LowNodeName, location.SerializedLocationType], Any]
 
-# first tuple is a key
-# serializedtype is the value of the high node
+
+# for example of RealizationMapping
+# high node, high val: (LHS, 7) => List[Realization]
+# Realization is the vector of values for this high-low graph mapping
 # list relaizations - all possible low node values that could correspond to this high node value
 # e.g. a=1, and a maps to low node x, then these are all the values of x that are observed
 RealizationMapping = Dict[Tuple[HighNodeName, SerializedType], List[Realization]]
@@ -92,6 +94,10 @@ class BatchedInterchange:
             intervention values
         :param device:
         """
+	# josh: todo
+	if isinstance(low_nodes_to_indices, dict):
+	    for v in low_nodes_to_indices.values():
+		assert isinstance(v, list)
         if result_format not in BatchedInterchange.accepted_result_format:
             raise ValueError(f"Incorrect result format '{result_format}'. "
                              f"Must be in {BatchedInterchange.accepted_result_format}.")
@@ -228,11 +234,13 @@ class BatchedInterchange:
 		# realizations are instantiations of low nodes with values
 		# collect low node values and make interventions with them
 		for minibatch in batch:
-		    minibatch = {k: v.to(self.device) \
-			if isinstance(v, (torch.Tensor, Intervention, GraphInput)) else v
+		    # minibatch = {k: v.to(self.device) \
+		    #     if isinstance(v, (torch.Tensor, Intervention, GraphInput)) else v
+		    #              for k, v in minibatch.items()}
+		    minibatch = {k: v.to(self.device)
 				 for k, v in minibatch.items()}
 
-                    low_intervention = minibatch["low_intervention"]
+		    low_intervention = minibatch["low_intervention"]
                     high_intervention = minibatch["high_intervention"]
 
                     actual_batch_size = low_intervention.get_batch_size()
