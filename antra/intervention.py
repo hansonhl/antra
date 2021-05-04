@@ -91,7 +91,7 @@ class Intervention:
         ivn_dict = dict(ivn_dict)
         loc_dict = dict(loc_dict)
         return cls(base, intervention=ivn_dict, location=loc_dict, batched=False,
-                   cache_results=cache_results, cache_base_results=cache_base_results)
+                   cache_results=cache_results, cache_base_results=cache_base_results, realization=realization)
 
     @classmethod
     def batched(cls, base: Union[Dict, GraphInput],
