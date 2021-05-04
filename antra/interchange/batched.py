@@ -356,7 +356,7 @@ class BatchedInterchange:
 
 
 class InterchangeDataset(IterableDataset):
-    def __init__(self, mapping: AbstractionMapping, ca: BatchedInterchange,
+    def __init__(self, mapping: AbstractionMapping, ca: Union[BatchedInterchange, "CounterfactualTraining"],
                  collate_fn: Callable):
         super(InterchangeDataset, self).__init__()
         self.ca = ca
