@@ -4,6 +4,7 @@ from pprint import pprint
 from antra import *
 from antra.interchange import BatchedInterchange
 from antra.location import location_to_str, reduce_dim
+from pprint import pp
 
 import torch
 import torch.nn.functional as F
@@ -17,6 +18,8 @@ class BooleanLogicProgram(ComputationGraph):
         leaf2 = GraphNode.leaf("leaf2")
         leaf3 = GraphNode.leaf("leaf3")
 
+	# this decorator will first call init, then __call__, which returns the
+	# graphnode object
         @GraphNode(leaf1,leaf2)
         def node(x,y):
             return x & y
@@ -38,14 +41,14 @@ class NeuralNetwork(ComputationGraph):
         self.b = 1.5
 
         @GraphNode(leaf1,leaf2, leaf3)
-        def hidden1(x,y,z):
+	def hidden1(x,y,z):
             a = torch.stack([x, y, z], dim=-1)
             h = a.matmul(self.W) + self.B
             h = F.relu(h)
             return h
 
         @GraphNode(hidden1)
-        def hidden2(x):
+	def hidden2(x):
             return x.matmul(self.w) - self.b
 
         @GraphNode(hidden2)
@@ -185,9 +188,18 @@ def test_mapping_generation():
     ]
 
     fixed_node_mapping =  {x: {x: None} for x in ["root", "leaf1",  "leaf2", "leaf3"]}
+
+    # all the places we want to try intervening
+    # each key is a separate intervention, considered separately
     low_nodes_to_indices = {
-        "hidden2": [None],
-        "hidden1": [LOC[:,0] , LOC[:, 1], LOC[:, 2], LOC[:,:1], LOC[:,1:], None]
+	#"hidden2": [None], # doesn't make sense
+	#
+	"hidden1": [
+	    LOC[:,0] , LOC[:, 1], LOC[:, 2],
+	   LOC[:,:2], LOC[:,1:],
+	    [LOC[:,0], LOC[:,2]],
+	    None]      # could also do [LOC[:,0], LOC[:,2]]
+	# todo: slices are start, end, ??
     }
 
     ca = BatchedInterchange(
@@ -214,9 +226,13 @@ def test_mapping_generation():
                     ok = True
             assert ok
 
-def test_abstraction_medium():
+def make_experiment():
     high_model= BooleanLogicProgram()
     low_model = NeuralNetwork()
+
+
+    # low and high need to be aligned
+    # BatchedInterchange will create a mapping between low and high
     low_inputs = [
         GraphInput({
             "leaf1": torch.tensor(a),
@@ -231,7 +247,11 @@ def test_abstraction_medium():
             "leaf3": torch.tensor(c)
         }) for (a, b, c) in product((False, True), repeat=3)
     ]
+    pp(low_inputs)
+    pp(high_inputs)
 
+    # for each high input, add 2 interventions: true / false for intermediate node
+    # this could be made from high inputs
     high_ivns = [
         Intervention({
             "leaf1": torch.tensor(a),
@@ -242,11 +262,107 @@ def test_abstraction_medium():
         })
         for (a, b, c, y) in product((True, False), repeat=4)
     ]
+    pp(high_ivns)
 
+    # nodes to not intervene on
+    # usually is just the leaves and the root
+    # {x: {y: }} - x is high level node names,
+    # # y is low
+    # second dictionary - might no intervene on entire low node, or one high level to
+    # multiple low level nodes
+    # {high_leaf: {low_leaf_1, low_leaf_2}}
+    # go get high_leaf_1
+    # go get low_leaf_1 -> maps to many
+    # {high_leaf_1: {low_leaf_1: [LOC1, LOC2]}
+    # high node to low node; to "indices" in the network
+
+    # todo: why do we need to specify root as fixed if it's not in the high_ivns
     fixed_node_mapping =  {x: {x: None} for x in ["root", "leaf1",  "leaf2", "leaf3"]}
+
     low_nodes_to_indices = {
-        "hidden2": [None],
-        "hidden1": [LOC[:,0], LOC[:, 1], LOC[:, 2], LOC[:,:2], LOC[:,1:], LOC[:, :]]
+	# "hidden2": [None],      # hidden2 is scalar; None as a location means ALL
+	"hidden1": [
+	    # get all possible sets of columns
+	    LOC[:,0], LOC[:, 1], LOC[:, 2],     # batch, then column in the network
+	    LOC[:,:2], LOC[:,1:], LOC[:, :]     # first 2 col, last 2 col, then all
+	]
+    }
+    # loc for bert LOC[:,3,:] (batch_size, sentence_len, hidden_dim)
+
+    experiment = BatchedInterchange(
+	low_model=low_model,
+	high_model=high_model,
+	low_inputs=low_inputs,
+	high_inputs=high_inputs,
+	high_interventions=high_ivns,
+	low_nodes_to_indices=low_nodes_to_indices,
+	fixed_node_mapping=fixed_node_mapping,
+	store_low_interventions=True,
+	result_format="simple",
+	batch_size=12,
+    )
+    return experiment
+
+def test_abstraction_medium():
+    high_model= BooleanLogicProgram()
+    low_model = NeuralNetwork()
+
+
+    # low and high need to be aligned
+    # BatchedInterchange will create a mapping between low and high
+    low_inputs = [
+	GraphInput({
+	    "leaf1": torch.tensor(a),
+	    "leaf2": torch.tensor(b),
+	    "leaf3": torch.tensor(c)
+	}) for (a, b, c) in product((-1., 1.), repeat=3)
+    ]
+    high_inputs = [
+	GraphInput({
+	    "leaf1": torch.tensor(a),
+	    "leaf2": torch.tensor(b),
+	    "leaf3": torch.tensor(c)
+	}) for (a, b, c) in product((False, True), repeat=3)
+    ]
+    pp(low_inputs)
+    pp(high_inputs)
+
+    # for each high input, add 2 interventions: true / false for intermediate node
+    # this could be made from high inputs
+    high_ivns = [
+	Intervention({
+	    "leaf1": torch.tensor(a),
+	    "leaf2": torch.tensor(b),
+	    "leaf3": torch.tensor(c),
+	}, {
+	    "node": torch.tensor(y)
+	})
+	for (a, b, c, y) in product((True, False), repeat=4)
+    ]
+    pp(high_ivns)
+
+    # nodes to not intervene on
+    # usually is just the leaves and the root
+    # {x: {y: }} - x is high level node names,
+    # # y is low
+    # second dictionary - might no intervene on entire low node, or one high level to
+    # multiple low level nodes
+    # {high_leaf: {low_leaf_1, low_leaf_2}}
+    # go get high_leaf_1
+    # go get low_leaf_1 -> maps to many
+    # {high_leaf_1: {low_leaf_1: [LOC1, LOC2]}
+    # high node to low node; to "indices" in the network
+
+    # todo: why do we need to specify root as fixed if it's not in the high_ivns
+    fixed_node_mapping =  {x: {x: None} for x in ["root", "leaf1",  "leaf2", "leaf3"]}
+
+    low_nodes_to_indices = {
+	# "hidden2": [None],      # hidden2 is scalar; None as a location means ALL
+	"hidden1": [
+	    # get all possible sets of columns
+	    LOC[:,0], LOC[:, 1], LOC[:, 2],     # batch, then column in the network
+	    LOC[:,:2], LOC[:,1:], LOC[:, :]     # first 2 col, last 2 col, then all
+	]
     }
     # loc for bert LOC[:,3,:] (batch_size, sentence_len, hidden_dim)
 
@@ -264,7 +380,7 @@ def test_abstraction_medium():
     )
 
     find_abstr_res = experiment.find_abstractions()
-
+    pp(find_abstr_res)
 
     success_list = []
     for result, mapping in find_abstr_res:
