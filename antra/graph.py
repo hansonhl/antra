@@ -155,14 +155,18 @@ class ComputationGraph:
         #     self.clear_caches(intervention)
         #     intervention.cache_results = False
 
-    def clear_caches(self, inputs: Union[GraphInput, Intervention, None] = None):
+    def clear_caches(self,
+                     inputs: Union[GraphInput, Intervention, None] = None,
+                     force=False):
         """ Clear all caches, or clear a specified cache entry for a given input.
 
         :param inputs:
         :return:
         """
         for node in self.nodes.values():
-            if node.cache_results:
+            if force:
+                node.clear_caches(inputs)
+            elif node.cache_results:
                 node.clear_caches(inputs)
 
     def compute_node(self, node_name: str, x: GraphInput):
