@@ -3,8 +3,11 @@ import logging
 
 from antra import ComputationGraph, GraphNode, GraphInput
 from antra.utils import serialize
+from transformers import BatchEncoding, BertPreTrainedModel
+from transformers.models.bert import BertForSequenceClassification
 
 logger = logging.getLogger(__name__)
+
 
 def _generate_bert_layer_fxn(layer_module, i):
     """ Generate a function for a layer in bert.
@@ -15,6 +18,7 @@ def _generate_bert_layer_fxn(layer_module, i):
     :param i:
     :return: Callable function that corresponds to a bert layer
     """
+
     def _bert_layer_fxn(hidden_states, input_dict):
         head_mask = input_dict["head_mask"]
 
@@ -57,21 +61,22 @@ def generate_bert_compgraph(bert_model, final_node="pool"):
     # output_hidden_states = GraphNode.default_leaf("output_hidden_states")
     #
     kwarg_names = ["input_ids", "attention_mask", "token_type_ids",
-                    "position_ids", "inputs_embeds",
-                    "head_mask", "output_attentions", "output_hidden_states",
-                    "return_dict", "encoder_hidden_states",
-                    "encoder_attention_mask"]
+		   "position_ids", "inputs_embeds",
+		   "head_mask", "output_attentions", "output_hidden_states",
+		   "return_dict", "encoder_hidden_states",
+		   "encoder_attention_mask"]
     input_leaves = [GraphNode.leaf(name=name, use_default=True, default_value=None) for name in kwarg_names]
+
     # input_leaf = GraphNode.leaf("input")
 
     @GraphNode(*input_leaves, cache_results=False)
     def input_preparation(
-            input_ids, attention_mask, token_type_ids,
-            position_ids, head_mask, inputs_embeds,
-            output_attentions, output_hidden_states,
-            return_dict, encoder_hidden_states,
-            encoder_attention_mask
-        ):
+	input_ids, attention_mask, token_type_ids,
+	position_ids, head_mask, inputs_embeds,
+	output_attentions, output_hidden_states,
+	return_dict, encoder_hidden_states,
+	encoder_attention_mask
+    ):
         """
         Prepare inputs for Bert.
 
@@ -120,7 +125,8 @@ def generate_bert_compgraph(bert_model, final_node="pool"):
         if input_dict["token_type_ids"] is None:
             input_dict["token_type_ids"] = torch.zeros(input_shape, dtype=torch.long, device=device)
 
-        input_dict["extended_attention_mask"] = bert_model.get_extended_attention_mask(input_dict["attention_mask"], input_shape, device)
+	input_dict["extended_attention_mask"] = bert_model.get_extended_attention_mask(input_dict["attention_mask"],
+										       input_shape, device)
         input_dict["head_mask"] = bert_model.get_head_mask(input_dict["head_mask"], bert_model.config.num_hidden_layers)
 
         return input_dict
@@ -141,14 +147,15 @@ def generate_bert_compgraph(bert_model, final_node="pool"):
     for i in range(len(bert_model.encoder.layer)):
         f = _generate_bert_layer_fxn(bert_model.encoder.layer[i], i)
         hidden_layer = GraphNode(hidden_layer, input_preparation,
-                                name=f"bert_layer_{i}",
-                                forward=f)
+				 name=f"bert_layer_{i}",
+				 forward=f)
 
     # Output pooling, if specified
     if bert_model.pooler is not None and final_node == "pool":
         @GraphNode(hidden_layer)
         def pool(h):
             return bert_model.pooler(h)
+
         return pool
 
     elif final_node == "pool":
@@ -159,11 +166,17 @@ def generate_bert_compgraph(bert_model, final_node="pool"):
     else:
         raise ValueError(f"Invalid final node specification: {final_node}!")
 
+
 class BertGraphInput(GraphInput):
-    def __init__(self, input_dict, cache_results=True):
+    def __init__(self,
+		 input_dict,
+		 cache_results=True,
+		 batched=True):
+	# todo: keys unused; batched seems to have no effect
+	# keys = [serialize(x) for x in input_dict["input_ids"]]
         super().__init__(
             values=input_dict,
-            batched=True,
+	    batched=batched,
             batch_dim=0,
             key_leaves=["input_ids"],
             non_batch_leaves=["head_mask", "output_attentions",
@@ -215,7 +228,7 @@ class BertForMaskedLMCompGraph(ComputationGraph):
 
 
 class BertForNextSentecePredictionCompGraph(ComputationGraph):
-    def __init__(self, model):
+    def __init__(self, model: BertPreTrainedModel):
         self.model = model
         self.bert_model = model.bert
         self.cls = model.cls
@@ -230,7 +243,7 @@ class BertForNextSentecePredictionCompGraph(ComputationGraph):
 
 
 class BertForSequenceClassificationCompGraph(ComputationGraph):
-    def __init__(self, model):
+    def __init__(self, model: BertForSequenceClassification):
         self.model = model
         self.bert_model = model.bert
         self.dropout = model.dropout
@@ -244,6 +257,7 @@ class BertForSequenceClassificationCompGraph(ComputationGraph):
             return self.cls(self.dropout(h))
 
         super().__init__(cls_head)
+
 
 class BertForTokenClassificationCompGraph(ComputationGraph):
     def __init__(self, model):

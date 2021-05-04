@@ -1,21 +1,20 @@
 import copy
+# from antra.utils import serialize, is_serialized, idx_by_dim, SerializedType
+import logging
 from collections import defaultdict
 from pprint import pprint
-
-import torch
-import numpy as np
-from torch.utils.data import IterableDataset, DataLoader
-
 from typing import *
 
+import numpy as np
+import torch
+from torch.utils.data import DataLoader, IterableDataset
+from tqdm import tqdm
+
 from antra import *
-import antra.location as location
-import antra.utils as utils
-from antra.realization import Realization, SerializedRealization
 from antra.interchange.mapping import create_possible_mappings, AbstractionMapping
-# from antra.utils import serialize, is_serialized, idx_by_dim, SerializedType
+from antra.realization import Realization, SerializedRealization
 
-
+log = logging.getLogger(__name__)
 
 HighNodeName = NodeName
 LowNodeName = NodeName
@@ -26,27 +25,36 @@ RealizationMapping = Dict[Tuple[HighNodeName, SerializedType], List[Realization]
 RealizationRecord = Dict[Tuple[HighNodeName, SerializedType], Set[SerializedRealization]]
 
 
+class ICDDataloader(DataLoader):
+    def __len__(self):
+	ct = 0
+	for _ in self:
+	    ct += 1
+	return ct
+
+
 class BatchedInterchange:
-    accepted_result_format = ["simple", "equality"]
+    accepted_result_format = ["simple", "equality", "return_all"]
+
     def __init__(
-            self,
-            low_model: ComputationGraph,
-            high_model: ComputationGraph,
-            low_inputs: Sequence[GraphInput],
-            high_inputs: Sequence[GraphInput],
-            high_interventions: Sequence[Intervention],
-            fixed_node_mapping: AbstractionMapping,
-            high_to_low_keys: Optional[Dict[SerializedType, SerializedType]]=None,
-            ignored_low_nodes: Optional[Sequence[str]]=None,
-            low_nodes_to_indices: Optional[Dict[LowNodeName, List[LocationType]]]=None,
-            batch_dim: int = 0,
-            batch_size: int = 1,
-            cache_interv_results: bool = False,
-            cache_base_results: bool = True,
-            result_format: str = "equality",
-            store_low_interventions: bool = False,
-            trace_realization_origins: bool = False,
-            device: Optional[torch.device] = None
+	self,
+	low_model: ComputationGraph,
+	high_model: ComputationGraph,
+	low_inputs: Sequence[GraphInput],
+	high_inputs: Sequence[GraphInput],
+	high_interventions: Sequence[Intervention],
+	fixed_node_mapping: AbstractionMapping,
+	high_to_low_keys: Optional[Dict[SerializedType, SerializedType]] = None,
+	ignored_low_nodes: Optional[Sequence[str]] = None,
+	low_nodes_to_indices: Optional[Dict[LowNodeName, List[LocationType]]] = None,
+	batch_dim: int = 0,
+	batch_size: int = 1,
+	cache_interv_results: bool = False,
+	cache_base_results: bool = True,
+	result_format: str = "equality",
+	store_low_interventions: bool = False,
+	trace_realization_origins: bool = False,
+	device: Optional[torch.device] = None
     ):
         """
         :param low_model:
@@ -83,7 +91,8 @@ class BatchedInterchange:
         self.high_interventions = high_interventions
 
         if not all(not interv.batched for interv in high_interventions):
-            raise ValueError("Does not support batched interventions for `high_interventions` in CausalAbstraction constructor")
+	    raise ValueError(
+		"Does not support batched interventions for `high_interventions` in CausalAbstraction constructor")
 
         self.high_intervention_range = self._get_high_intervention_range(high_interventions)
 
@@ -91,12 +100,13 @@ class BatchedInterchange:
             low_model, high_model, fixed_node_mapping, ignored_low_nodes,
             low_nodes_to_indices
         )
+	log.debug(f'Created {len(self.mappings)} mappings')
 
         self.low_keys_to_inputs = {gi.keys: gi for gi in low_inputs}
         self.high_keys_to_inputs = {gi.keys: gi for gi in high_inputs}
         if not high_to_low_keys:
             assert len(low_inputs) == len(high_inputs)
-            high_to_low_keys = {hi.keys : lo.keys for lo, hi in zip(low_inputs, high_inputs)}
+	    high_to_low_keys = {hi.keys: lo.keys for lo, hi in zip(low_inputs, high_inputs)}
         self.high_to_low_input_keys = high_to_low_keys
         self.high_keys_to_low_inputs = {hi_key: self.low_keys_to_inputs[lo_key]
                                         for hi_key, lo_key in high_to_low_keys.items()}
@@ -112,7 +122,9 @@ class BatchedInterchange:
         self.high_keys_to_interventions = {ivn.keys: ivn for ivn in high_interventions}
         self.low_keys_to_interventions = {}
 
-        self._add_empty_interventions()
+	# base inputs without any interventions -> run first pass
+	# to get the realized values of all the low nodes we care about
+	self._add_empty_interventions()  # create an empy intervention for every high level intervention
 
         # following info used to set up batched interventions
         self.batch_dim = batch_dim
@@ -122,13 +134,17 @@ class BatchedInterchange:
 
         self.high_key_leaves = high_inputs[0].key_leaves
         self.low_key_leaves = low_inputs[0].key_leaves
-        self.high_non_batch_leaves = high_inputs[0].non_batch_leaves
-        self.low_non_batch_leaves = low_inputs[0].non_batch_leaves
+	self.high_non_batch_leaves = high_inputs[0].non_batch_leaves
+	self.low_non_batch_leaves = low_inputs[0].non_batch_leaves
 
-        self.device = device if device is not None else torch.device("cpu")
+	if device is None:
+	    log.warning('No device given, using CPU')
+	    self.device = torch.device('cpu')
+	else:
+	    self.device = device
 
-    def _get_high_intervention_range(self, high_interventions: Sequence[Intervention])\
-            -> Dict[HighNodeName, Set[SerializedType]]:
+    def _get_high_intervention_range(self, high_interventions: Sequence[Intervention]) \
+	-> Dict[HighNodeName, Set[SerializedType]]:
         interv_range = defaultdict(set)
         for interv in high_interventions:
             for high_node_name, val in interv.intervention._values.items():
@@ -155,98 +171,133 @@ class BatchedInterchange:
             results.append((self.test_mapping(mapping), mapping))
         return results
 
-    def test_mapping(self, mapping: AbstractionMapping) -> Dict[Tuple[SerializedType, SerializedType], Any]:
+    def test_mapping(self, mapping: AbstractionMapping,
+		     allow_multi_iteration=False) -> Dict[Tuple[SerializedType, SerializedType], Any]:
+	"""
+	Turn a single AbstractionMapping into all possible exchanges for that mapping
+	"""
         self.curr_mapping: AbstractionMapping = mapping
 
         icd = InterchangeDataset(mapping, self, collate_fn=self.collate_fn)
         icd_dataloader = icd.get_dataloader(batch_size=self.batch_size, shuffle=False)
 
-        batched = self.batch_size > 1
-
-        results = {}
+	results = {}  # this accumulates all results
+	# dict of Tuple[keys] -> dict, usually
         iteration = 0
         while True:
             # print(f"======== iteration {iteration} ========")
             new_realizations: RealizationMapping = {}
             total_new_realizations = 0
             num_interventions = 0
-            for batch in icd_dataloader:
+	    results_total = 0
+	    log.debug(f'Running DL with outer iteration {iteration}, DL size {len(icd_dataloader)}')
+	    if iteration >= 2:
+		assert allow_multi_iteration, f'Loop will run more than 2 total iterations. This should happen only' \
+					      f'if intervening on multiple high level nodes simultaneously'
+	    for batch in tqdm(icd_dataloader):
                 # batch is a list of dicts, each dict contains a batched low and high intervention
                 for minibatch in batch:
                     minibatch = {k: v.to(self.device) \
                         if isinstance(v, (torch.Tensor, Intervention, GraphInput)) else v
-                        for k, v in minibatch.items()}
+				 for k, v in minibatch.items()}
 
                     low_intervention = minibatch["low_intervention"]
                     high_intervention = minibatch["high_intervention"]
-                    # print("low interv")
-                    # print(low_intervention.base)
-                    # print("high interv")
-                    # pprint(high_intervention.base)
 
                     actual_batch_size = low_intervention.get_batch_size()
                     num_interventions += actual_batch_size
 
                     high_base_res, high_ivn_res = self.high_model.intervene_all_nodes(high_intervention)
-                    low_base_res, low_ivn_res = self.low_model.intervene_all_nodes(low_intervention)
+		    low_base_res, low_ivn_res = self.low_model.intervene_all_nodes(low_intervention)
 
-                    if not high_intervention.is_empty():
-                        self._add_results(
-                            results, high_intervention, low_intervention,
-                                high_base_res, high_ivn_res, low_base_res, low_ivn_res,
-                                actual_batch_size
-                        )
+		    if not high_intervention.is_empty():
+			new_results_ct = self._add_results(
+			    results, high_intervention, low_intervention,
+			    high_base_res, high_ivn_res, low_base_res, low_ivn_res,
+			    actual_batch_size
+			)
+			results_total += new_results_ct
 
-                    realizations, num_new_realizations = \
-                        self._create_new_realizations(
+		    realizations, num_new_realizations = \
+			self._create_new_realizations(
                             icd, high_intervention, low_intervention,
                             high_ivn_res, low_ivn_res, actual_batch_size)
 
                     total_new_realizations += num_new_realizations
                     merge_realization_mappings(new_realizations, realizations)
 
-            print(f"Got {total_new_realizations} new realizations")
-            # print(new_realizations)
+	    log.info(f'end of dataloader; {total_new_realizations} new realizations')
             if iteration == 0:
                 icd.did_empty_interventions = True
             iteration += 1
             if total_new_realizations == 0:
+		# if intervening on only 1 HL var, then will terminate after 2 loops
                 break
             else:
                 icd.update_realizations(new_realizations)
+
+	# potentially useful to not run out of cuda memory
+	del icd
+	del icd_dataloader
+
+	log.info(f'looked at {results_total} total results')
 
         return results
 
     def _add_results(self, results: Dict, high_ivn: Intervention, low_ivn: Intervention,
                      high_base_res: Dict[str, Any], high_ivn_res: Dict[str, Any],
                      low_base_res: Dict[str, Any], low_ivn_res: Dict[str, Any],
-                     actual_batch_size: int):
+		     actual_batch_size: int) -> int:
+
         low_root = self.low_model.root.name
         high_root = self.high_model.root.name
         hi_base_res, hi_ivn_res = high_base_res[high_root], high_ivn_res[high_root]
         lo_base_res, lo_ivn_res = low_base_res[low_root], low_ivn_res[low_root]
 
-        for i in range(actual_batch_size):
-            key = (low_ivn.keys[i], high_ivn.keys[i])
+	def _get_base_equality_result(i):
+	    _hi_base_res = utils.idx_by_dim(hi_base_res, i, high_ivn.batch_dim)
+	    _hi_ivn_res = utils.idx_by_dim(hi_ivn_res, i, high_ivn.batch_dim)
+	    _lo_base_res = utils.idx_by_dim(lo_base_res, i, low_ivn.batch_dim)
+	    _lo_ivn_res = utils.idx_by_dim(lo_ivn_res, i, low_ivn.batch_dim)
+	    d = {
+		"base_eq": _hi_base_res == _lo_base_res,
+		"ivn_eq": _hi_ivn_res == _lo_ivn_res,
+		"low_base_eq_ivn": _lo_base_res == _lo_ivn_res,
+		"high_base_eq_ivn": _hi_base_res == _hi_ivn_res
+	    }
+	    return d
+
+	for idx in range(actual_batch_size):
+	    key = (low_ivn.keys[idx], high_ivn.keys[idx])
+	    assert key not in results
             if self.result_format == "simple":
-                _hi_res = utils.idx_by_dim(hi_ivn_res, i, high_ivn.batch_dim)
-                _lo_res = utils.idx_by_dim(lo_ivn_res, i, low_ivn.batch_dim)
+		_hi_res = utils.idx_by_dim(hi_ivn_res, idx, high_ivn.batch_dim)
+		_lo_res = utils.idx_by_dim(lo_ivn_res, idx, low_ivn.batch_dim)
                 results[key] = (_hi_res == _lo_res)
             elif self.result_format == "equality":
-                _hi_base_res = utils.idx_by_dim(hi_base_res, i, high_ivn.batch_dim)
-                _hi_ivn_res = utils.idx_by_dim(hi_ivn_res, i, high_ivn.batch_dim)
-                _lo_base_res = utils.idx_by_dim(lo_base_res, i, low_ivn.batch_dim)
-                _lo_ivn_res = utils.idx_by_dim(lo_ivn_res, i, low_ivn.batch_dim)
-                d = {
-                    "base_eq": _hi_base_res == _lo_base_res,
-                    "ivn_eq": _hi_ivn_res == _lo_ivn_res,
-                    "low_base_eq_ivn": _lo_base_res == _lo_ivn_res,
-                    "high_base_eq_ivn": _hi_base_res == _hi_ivn_res
-                }
+		d = _get_base_equality_result(idx)
+		results[key] = d
+	    elif self.result_format == "return_all":
+		d = _get_base_equality_result(idx)
+		d.update(
+		    dict(
+			key=key[1],
+			high_ivn=high_ivn,
+			low_ivn=low_ivn,
+			high_base_res=high_base_res,
+			high_ivn_res=high_ivn_res,
+			low_base_res=low_base_res,
+			low_ivn_res=low_ivn_res
+		    )
+		)
                 results[key] = d
             else:
                 raise ValueError(f"Invalid result_format: {self.result_format}")
 
+	return actual_batch_size
+
+    # realization mapping is a dict mapping from
+    # high node + high node value TO List of realizations
     def _create_new_realizations(self, icd: "InterchangeDataset",
                                  high_ivn_batch: Intervention, low_ivn_batch: Intervention,
                                  high_ivn_res: Dict[str, Any], low_ivn_res: Dict[str, Any],
@@ -254,15 +305,20 @@ class BatchedInterchange:
         rzn_mapping: RealizationMapping = defaultdict(list)
         record: RealizationRecord = icd.realization_record
         new_rzn_count = 0
-        # print("--- Creating new rzns")
+
+	duplicate_ct = 0
 
         # TODO: Keep track of where the interventions came from
         origins = [self.low_keys_to_interventions[low_ivn_batch.keys[i]] \
                    for i in range(actual_batch_size)] if self.trace_realization_origins else None
 
         for high_node, high_values in high_ivn_res.items():
+	    # skip if we do not ever intervene on this high level node
             if high_node not in self.high_intervention_range:
                 continue
+	    # if there is a HL ivn, but the the high node not affected by this ivn
+	    # affected nodes are downstream causally, so this says don't create new realization
+	    # if we're not going to create a new downstream affected node
             if not high_ivn_batch.is_empty() and high_node not in high_ivn_batch.affected_nodes:
                 continue
 
@@ -295,12 +351,14 @@ class BatchedInterchange:
                 # check if we've seen it before
                 ser_rzn = rzns[i].serialize()
                 if ser_rzn in record[(high_node, ser_high_value)]:
+		    duplicate_ct += 1
                     continue
 
                 record[(high_node, ser_high_value)].add(ser_rzn)
                 rzn_mapping[(high_node, ser_high_value)].append(rzns[i])
                 new_rzn_count += 1
 
+	log.warning(f'Saw {duplicate_ct}duplicates (maybe dupe examples?). Please check.')
         return rzn_mapping, new_rzn_count
 
     def collate_fn(self, batch: List[Dict]) -> List[Dict]:
@@ -354,9 +412,12 @@ class BatchedInterchange:
         return minibatches
 
 
-
 class InterchangeDataset(IterableDataset):
-    def __init__(self, mapping: AbstractionMapping, ca: Union[BatchedInterchange, "CounterfactualTraining"],
+    """
+    yields pairs of high level and low level interventions
+    """
+
+    def __init__(self, mapping: AbstractionMapping, ca: BatchedInterchange,
                  collate_fn: Callable):
         super(InterchangeDataset, self).__init__()
         self.ca = ca
@@ -364,8 +425,10 @@ class InterchangeDataset(IterableDataset):
         self.low_outputs = []
         self.high_outputs = []
         self.realization_record: RealizationRecord = defaultdict(set)
-        self.all_realizations: RealizationMapping = defaultdict(list) # Maps a high variable and value (V_H, v_H) to vectors of low-values
-        self.curr_realizations: RealizationMapping = defaultdict(list) # Maps a high variable and value (V_H, v_H) to vectors of low-values, but just the last round
+	self.all_realizations: RealizationMapping = defaultdict(
+	    list)  # Maps a high variable and value (V_H, v_H) to vectors of low-values
+	self.curr_realizations: RealizationMapping = defaultdict(
+	    list)  # Maps a high variable and value (V_H, v_H) to vectors of low-values, but just the last round
 
         self.mapping = mapping
         self.collate_fn = collate_fn
@@ -457,7 +520,7 @@ class InterchangeDataset(IterableDataset):
             #     yield self._prepare_rzn_to_yield(low_base, high_intervention, rzn)
 
     def get_dataloader(self, **kwargs):
-        return DataLoader(self, collate_fn=self.collate_fn, **kwargs)
+	return ICDDataloader(self, collate_fn=self.collate_fn, **kwargs)
 
     # def populate_dataset(self):
     #     self.examples = []
@@ -534,10 +597,10 @@ def merge_realization_mappings(current: RealizationMapping, other: RealizationMa
 
 
 def pack_interventions(
-        interventions: Sequence[Intervention],
-        batch_dim: int = 0,
-        non_batch_inputs: Optional[Sequence[str]] = None
-    ) -> Tuple[Dict, Dict, Dict]:
+    interventions: Sequence[Intervention],
+    batch_dim: int = 0,
+    non_batch_inputs: Optional[Sequence[str]] = None
+) -> Tuple[Dict, Dict, Dict]:
     """ Pack a sequence of individual interventions into one batched intervention.
     All interventions must be in the same nodes and locations.
 
@@ -593,18 +656,19 @@ def pack_interventions(
     if not all(len(l) == batch_size for l in base_lists.values()):
         for leaf, vals in base_lists.items():
             if len(vals) != batch_size:
-                raise RuntimeError(f"List of values for leaf `{leaf}` has shorter length ({len(vals)}) than batch size ({batch_size})")
+		raise RuntimeError(
+		    f"List of values for leaf `{leaf}` has shorter length ({len(vals)}) than batch size ({batch_size})")
 
     # make sure intervention values have equal length
     if not ivn_is_empty:
         for node, vals in ivn_lists.items():
             if node not in multi_loc_nodes:
                 if len(vals) != batch_size:
-                    raise RuntimeError(f"List of values for intervention at `{node}` has shorter length ({len(vals)}) than batch size ({batch_size})")
+		    raise RuntimeError(
+			f"List of values for intervention at `{node}` has shorter length ({len(vals)}) than batch size ({batch_size})")
             else:
                 if not all(len(vals[j]) == batch_size for j in range(len(vals))):
                     raise RuntimeError(f"Lists of values for multi-location intervention have inconsistent length")
-
 
     base_dict = batchify(base_lists, batch_dim, multi_loc_nodes, non_batch_inputs)
     ivn_dict = batchify(ivn_lists, batch_dim, multi_loc_nodes) if not ivn_is_empty else {}
@@ -627,7 +691,8 @@ def batchify(input_lists, batch_dim, multi_loc_nodes, non_batch_inputs=None):
                 elif utils.is_numpy_array(one_val):
                     input_dict[key].append(np.stack(_vals, axis=batch_dim))
                 else:
-                    raise RuntimeError(f"Currently does not support automatically batchifying inputs with type {type(one_val)} for node `{key}`")
+		    raise RuntimeError(
+			f"Currently does not support automatically batchifying inputs with type {type(one_val)} for node `{key}`")
         else:
             one_val = vals[0]
             if non_batch_inputs and key in non_batch_inputs:
@@ -637,7 +702,8 @@ def batchify(input_lists, batch_dim, multi_loc_nodes, non_batch_inputs=None):
             elif utils.is_numpy_array(one_val):
                 input_dict[key] = np.stack(vals, axis=batch_dim)
             else:
-                raise RuntimeError(f"Currently does not support automatically batchifying inputs with type {type(one_val)} for node `{key}`")
+		raise RuntimeError(
+		    f"Currently does not support automatically batchifying inputs with type {type(one_val)} for node `{key}`")
     return input_dict
 
 

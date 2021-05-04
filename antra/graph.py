@@ -8,6 +8,11 @@ from .location import Location
 from typing import *
 from collections import deque
 
+import logging
+
+logging.getLogger(__name__)
+
+
 class ComputationGraph:
     def __init__(self, root: GraphNode):
         """
@@ -28,6 +33,7 @@ class ComputationGraph:
         """
         # TODO: check for cycles
         leaves = set()
+
         def add_node(node):
             if node.name in self.nodes:
                 if self.nodes[node.name] is not node:
@@ -40,6 +46,7 @@ class ComputationGraph:
                 leaves.add(node)
             for child in node.children:
                 add_node(child)
+
         add_node(self.root)
         return leaves
 
@@ -148,14 +155,18 @@ class ComputationGraph:
         #     self.clear_caches(intervention)
         #     intervention.cache_results = False
 
-    def clear_caches(self, inputs: Union[GraphInput, Intervention, None]=None):
+    def clear_caches(self,
+                     inputs: Union[GraphInput, Intervention, None] = None,
+                     force=False):
         """ Clear all caches, or clear a specified cache entry for a given input.
 
         :param inputs:
         :return:
         """
         for node in self.nodes.values():
-            if node.cache_results:
+            if force:
+                node.clear_caches(inputs)
+            elif node.cache_results:
                 node.clear_caches(inputs)
 
     def compute_node(self, node_name: str, x: GraphInput):
@@ -165,7 +176,11 @@ class ComputationGraph:
         :param x: GraphInput object
         :return: output from node
         """
-        return self.nodes[node_name].compute(x)
+        try:
+            return self.nodes[node_name].compute(x)
+        except KeyError as e:
+            logging.error(f'Invalid key {node_name}. Valid keys are {self.nodes.keys()}')
+            raise e
 
     def intervene_node(self, node_name: str, x: Intervention):
         """ Compute the value of a node during an intervention
