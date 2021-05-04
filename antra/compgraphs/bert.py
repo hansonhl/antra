@@ -170,11 +170,13 @@ def generate_bert_compgraph(bert_model, final_node="pool"):
 class BertGraphInput(GraphInput):
     def __init__(self,
 		 input_dict: BatchEncoding,
-		 cache_results=True):
-	keys = [serialize(x) for x in input_dict["input_ids"]]
+		 cache_results=True,
+		 batched=True):
+	# todo: keys unused; batched seems to have no effect
+	# keys = [serialize(x) for x in input_dict["input_ids"]]
         super().__init__(
             values=input_dict,
-            batched=True,
+	    batched=batched,
             batch_dim=0,
             key_leaves=["input_ids"],
             non_batch_leaves=["head_mask", "output_attentions",
