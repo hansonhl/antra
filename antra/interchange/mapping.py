@@ -1,14 +1,25 @@
 import copy
 import torch
-import itertools
-from antra import LOC
+import pprint
+import antra
 from antra import *
-
 
 from typing import *
 
 NodeName = str
 AbstractionMapping = Dict[NodeName, Dict[NodeName, LocationType]]
+
+def mapping_to_string(mapping: AbstractionMapping, ignore_nodes: None):
+    if ignore_nodes is None:
+        ignore_nodes = []
+    dict_to_print = {
+        high_node: [
+            f"{low_node}{antra.location.location_to_str(loc, add_brackets=True) if loc is not None else ''}"
+            for low_node, loc in d.items()
+        ]
+        for high_node, d in mapping.items() if high_node not in ignore_nodes
+    }
+    return pprint.pformat(dict_to_print, indent=1, compact=True)
 
 def get_nodes_and_dependencies(graph: ComputationGraph):
         nodes = [node_name for node_name in graph.nodes]
