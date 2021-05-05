@@ -246,6 +246,8 @@ class Intervention:
 
     @property
     def base(self):
+        """ Base is a dict from leaf nodes to leaf node values
+        """
         return self._base
 
     @property
