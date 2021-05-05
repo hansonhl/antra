@@ -2,7 +2,6 @@ import copy
 # from antra.utils import serialize, is_serialized, idx_by_dim, SerializedType
 import logging
 from collections import defaultdict
-from pprint import pprint
 from typing import *
 import inspect
 
@@ -324,7 +323,7 @@ class BatchedInterchange:
         record: RealizationRecord = icd.realization_record
         new_rzn_count = 0
 
-        duplicate_ct = 0
+	# duplicate_ct = 0
 
         # TODO: Keep track of where the interventions came from
         origins = [self.low_keys_to_interventions[low_ivn_batch.keys[i]] \
@@ -369,14 +368,14 @@ class BatchedInterchange:
                 # check if we've seen it before
                 ser_rzn = rzns[i].serialize()
                 if ser_rzn in record[(high_node, ser_high_value)]:
-                    duplicate_ct += 1
+		    # duplicate_ct += 1
                     continue
 
                 record[(high_node, ser_high_value)].add(ser_rzn)
                 rzn_mapping[(high_node, ser_high_value)].append(rzns[i])
                 new_rzn_count += 1
 
-        log.warning(f'Saw {duplicate_ct} duplicates (maybe dupe examples?). Please check.')
+	# log.warning(f'Saw {duplicate_ct} duplicates (maybe dupe examples?). Please check.')
         return rzn_mapping, new_rzn_count
 
     def collate_fn(self, batch: List[Dict]) -> List[Dict]:
