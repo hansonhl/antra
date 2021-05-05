@@ -382,7 +382,7 @@ class BatchedInterchange:
     def collate_fn(self, batch: List[Dict]) -> List[Dict]:
         """ Collate function called by dataloader.
 
-        :param batch:
+        :param batch: list of individual items yielded from InterchangeDataset.__iter__
         :return:
         """
         # package up a list of individual interventions into multiple batched interventions
@@ -405,9 +405,14 @@ class BatchedInterchange:
                 key_leaves=self.low_key_leaves,
                 non_batch_leaves=self.low_non_batch_leaves
             )
+            low_realizations = [d["low_intervention"].realization for d in minibatch_dicts]
+            if all(rzn is None for rzn in low_realizations):
+                low_realizations = None
             low_ivn = Intervention.batched(
                 low_base_input, low_ivn_dict, low_loc_dict,
-                batch_dim=self.batch_dim, cache_base_results=self.cache_interv_results)
+                batch_dim=self.batch_dim, cache_base_results=self.cache_interv_results,
+                realization=low_realizations
+            )
 
             high_base_dict, high_ivn_dict, high_loc_dict = pack_interventions(
                 [d["high_intervention"] for d in minibatch_dicts],

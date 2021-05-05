@@ -25,7 +25,7 @@ class Intervention:
             cache_base_results:bool=True,
             batched: bool=False,
             batch_dim: int = 0,
-            realization: Optional[Realization] = None
+            realization: Optional[Union[List[Realization], Realization]] = None
     ):
         """ Construct an intervention experiment.
 
@@ -95,14 +95,16 @@ class Intervention:
 
     @classmethod
     def batched(cls, base: Union[Dict, GraphInput],
-                intervention: Union[Dict, GraphInput]=None,
-                location: Dict[str, LocationType]=None, cache_results: bool=True,
-                cache_base_results: bool=True,
-                batch_dim: int=0):
+                intervention: Union[Dict, GraphInput] = None,
+                location: Dict[str, LocationType] = None,
+                cache_results: bool = True,
+                cache_base_results: bool = True,
+                batch_dim: int=0,
+                realization: Optional[List[Realization]] = None):
         """ Specify a batched intervention object"""
         return cls(base=base, intervention=intervention, location=location,
                    cache_results=cache_results, cache_base_results=cache_base_results,
-                   batched=True, batch_dim=batch_dim)
+                   batched=True, batch_dim=batch_dim, realization=realization)
 
     def _setup(self, base=None, intervention=None, location=None):
         if base is not None:
