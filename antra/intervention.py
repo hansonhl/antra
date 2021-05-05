@@ -91,7 +91,8 @@ class Intervention:
         ivn_dict = dict(ivn_dict)
         loc_dict = dict(loc_dict)
         return cls(base, intervention=ivn_dict, location=loc_dict, batched=False,
-                   cache_results=cache_results, cache_base_results=cache_base_results, realization=realization)
+                   cache_results=cache_results, cache_base_results=cache_base_results,
+                   realization=realization)
 
     @classmethod
     def batched(cls, base: Union[Dict, GraphInput],
@@ -357,9 +358,9 @@ class Intervention:
         # otherwise, we just do the default
         if ivn is None:
             ivn = self.intervention.keys
-            repr_dict = {
-                "base": self.base.keys,
+        repr_dict = {
+            "base": self.base.keys,
             "interv": ivn,
-                "locs": self.location
-            }
-            return pprint.pformat(repr_dict, indent=1, compact=True)
+            "locs": self.location
+        }
+        return pprint.pformat(repr_dict, indent=1, compact=True)
