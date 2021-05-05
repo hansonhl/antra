@@ -4,6 +4,7 @@ import logging
 from collections import defaultdict
 from pprint import pprint
 from typing import *
+import inspect
 
 import numpy as np
 import torch
@@ -51,7 +52,7 @@ class BatchedInterchange:
         batch_size: int = 1,
         cache_interv_results: bool = False,
         cache_base_results: bool = True,
-        result_format: str = "equality",
+        result_format: Union[str, Callable] = "equality",
         store_low_interventions: bool = False,
         trace_realization_origins: bool = False,
         device: Optional[torch.device] = None
@@ -74,16 +75,18 @@ class BatchedInterchange:
         :param batch_size:
         :param cache_interv_results:
         :param cache_base_results:
-        :param result_format: type of results to return
+        :param result_format: how to package the result of each individual
+            intervention experiments. Can be a string in {"simple", "equality",
+            "return_all"} or a callable object.
         :param store_low_interventions: store all the low-level interventions
             that are generated in `self.low_keys_to_interventions`
         :param trace_realization_origins: whether to trace the origin of low
             intervention values
         :param device:
         """
-        if result_format not in BatchedInterchange.accepted_result_format:
+        if (not callable(result_format)) and (result_format not in BatchedInterchange.accepted_result_format):
             raise ValueError(f"Incorrect result format '{result_format}'. "
-                             f"Must be in {BatchedInterchange.accepted_result_format}.")
+                             f"Must be callable or in {BatchedInterchange.accepted_result_format}.")
         self.low_model = low_model
         self.high_model = high_model
         self.low_inputs = low_inputs
@@ -270,7 +273,22 @@ class BatchedInterchange:
         for idx in range(actual_batch_size):
             key = (low_ivn.keys[idx], high_ivn.keys[idx])
             assert key not in results
-            if self.result_format == "simple":
+
+            if callable(self.result_format):
+                params = {
+                    "high_base_res": utils.idx_by_dim(hi_base_res, idx, high_ivn.batch_dim),
+                    "high_ivn_res": utils.idx_by_dim(hi_ivn_res, idx, high_ivn.batch_dim),
+                    "low_base_res": utils.idx_by_dim(lo_base_res, idx, high_ivn.batch_dim),
+                    "low_ivn_res": utils.idx_by_dim(lo_ivn_res, idx, low_ivn.batch_dim),
+                    "key": key,
+                    "idx_in_batch": idx,
+                    "low_batched_ivn": low_ivn,
+                    "high_batched_ivn": high_ivn
+                }
+                params = {k: params[k] for k in inspect.getfullargspec(self.result_format).args if k in params}
+                res = self.result_format(**params)
+                results[key] = res
+            elif self.result_format == "simple":
                 _hi_res = utils.idx_by_dim(hi_ivn_res, idx, high_ivn.batch_dim)
                 _lo_res = utils.idx_by_dim(lo_ivn_res, idx, low_ivn.batch_dim)
                 results[key] = (_hi_res == _lo_res)
@@ -358,7 +376,7 @@ class BatchedInterchange:
                 rzn_mapping[(high_node, ser_high_value)].append(rzns[i])
                 new_rzn_count += 1
 
-        log.warning(f'Saw {duplicate_ct}duplicates (maybe dupe examples?). Please check.')
+        log.warning(f'Saw {duplicate_ct} duplicates (maybe dupe examples?). Please check.')
         return rzn_mapping, new_rzn_count
 
     def collate_fn(self, batch: List[Dict]) -> List[Dict]:
