@@ -215,6 +215,13 @@ class ComputationGraph:
 
     def set_state_dict(self, d):
         pass
+        
+    def compute_node_partitions(self, input1, input2):
+        partition = defaultdict(set)
+        for node in self.nodes:
+            int1 = Intervention(input1, {node: self.compute_node(node,input2)})
+            partition[self.intervene_node("root", int1)[1]].add(node)
+        return partition
 
     @property
     def model(self) -> "torch.nn.Module":

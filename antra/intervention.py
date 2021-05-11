@@ -17,15 +17,15 @@ class Intervention:
     """ A hashable intervention object """
 
     def __init__(
-            self,
-            base: Union[Dict, GraphInput],
-            intervention: Union[Dict, GraphInput]=None,
-            location: Dict=None,
-            cache_results: bool=True,
-            cache_base_results:bool=True,
-            batched: bool=False,
-            batch_dim: int = 0,
-            realization: Optional[Realization] = None
+        self,
+        base: Union[Dict, GraphInput],
+        intervention: Union[Dict, GraphInput] = None,
+        location: Dict = None,
+        cache_results: bool = True,
+        cache_base_results: bool = True,
+        batched: bool = False,
+        batch_dim: int = 0,
+        realization: Optional[Union[List[Realization], Realization]] = None
     ):
         """ Construct an intervention experiment.
 
@@ -66,12 +66,12 @@ class Intervention:
 
     @classmethod
     def from_realization(
-            cls,
-            base: Union[Dict, GraphInput],
-            realization: Realization,
-            cache_results: bool=True,
-            cache_base_results: bool=True
-        ):
+        cls,
+        base: Union[Dict, GraphInput],
+        realization: Realization,
+        cache_results: bool = True,
+        cache_base_results: bool = True
+    ):
         ivn_dict, loc_dict = defaultdict(list), defaultdict(list)
 
         for (node_name, ser_low_loc), val in realization.items():
@@ -91,18 +91,21 @@ class Intervention:
         ivn_dict = dict(ivn_dict)
         loc_dict = dict(loc_dict)
         return cls(base, intervention=ivn_dict, location=loc_dict, batched=False,
-                   cache_results=cache_results, cache_base_results=cache_base_results, realization=realization)
+                   cache_results=cache_results, cache_base_results=cache_base_results,
+                   realization=realization)
 
     @classmethod
     def batched(cls, base: Union[Dict, GraphInput],
-                intervention: Union[Dict, GraphInput]=None,
-                location: Dict[str, LocationType]=None, cache_results: bool=True,
-                cache_base_results: bool=True,
-                batch_dim: int=0):
+                intervention: Union[Dict, GraphInput] = None,
+                location: Dict[str, LocationType] = None,
+                cache_results: bool = True,
+                cache_base_results: bool = True,
+                batch_dim: int = 0,
+                realization: Optional[List[Realization]] = None):
         """ Specify a batched intervention object"""
         return cls(base=base, intervention=intervention, location=location,
                    cache_results=cache_results, cache_base_results=cache_base_results,
-                   batched=True, batch_dim=batch_dim)
+                   batched=True, batch_dim=batch_dim, realization=realization)
 
     def _setup(self, base=None, intervention=None, location=None):
         if base is not None:
@@ -141,7 +144,7 @@ class Intervention:
                 # parse any index-like expressions in name
                 loc_search = loc_pattern.search(full_name)
                 if loc_search:
-                    node_name = full_name.split("[")[0] # bare node name without indexing
+                    node_name = full_name.split("[")[0]  # bare node name without indexing
                     loc_str = loc_search.group().strip("[]")
                     loc = Location.parse_str(loc_str)
                     to_delete.append(full_name)
@@ -162,11 +165,11 @@ class Intervention:
                         location[node_name] = loc
                     else:
                         # different locations in same node
-                        prev_locs = location[node_name] if isinstance(location[node_name], list) else [location[node_name]]
+                        prev_locs = location[node_name] if isinstance(location[node_name], list) else [
+                            location[node_name]]
                         prev_locs.append(loc)
                         location[node_name] = prev_locs
                         self.multi_loc_nodes.add(node_name)
-
 
             # remove indexing part in names
             for node_name in to_delete:
@@ -202,8 +205,8 @@ class Intervention:
         # validate multi-location nodes
         for node_name in multi_loc_nodes:
             if not isinstance(location[node_name], list) or \
-                    not isinstance(intervention[node_name], list) or \
-                    len(location[node_name]) != len(intervention[node_name]):
+                not isinstance(intervention[node_name], list) or \
+                len(location[node_name]) != len(intervention[node_name]):
                 raise ValueError(
                     f"Mismatch between number of locations and values for node {node_name}")
 
@@ -270,7 +273,6 @@ class Intervention:
         d[name] = value
         self._setup(intervention=d, location=None)  # do not overwrite existing locations
 
-
     def set_location(self, name, value):
         d = self._location if self._location is not None else {}
         d[name] = value
@@ -281,7 +283,6 @@ class Intervention:
 
     # def __setitem__(self, name, value):
     #     self.set_intervention(name, value)
-
 
     def find_affected_nodes(self, graph):
         """Find nodes affected by this intervention in a computation graph.
@@ -347,17 +348,20 @@ class Intervention:
             try:
                 if 'bert' in self.intervention.keys[0][0]:
                     ivn = f'{self.intervention.keys[0][0]} ... (hidden omitted)'
-            except: pass
+            except:
+                pass
             try:
                 if 'bert' in self.intervention.keys[0][0][0]:
                     ivn = f'{self.intervention.keys[0][0][0]} ... (hidden omitted)'
-            except: pass
+            except:
+                pass
         # otherwise, we just do the default
         if ivn is None:
             ivn = self.intervention.keys
-            repr_dict = {
-                "base": self.base.keys,
-                "interv": ivn,
-                "locs": self.location
-            }
-            return pprint.pformat(repr_dict, indent=1, compact=True)
+
+        repr_dict = {
+            "base": self.base.keys,
+            "interv": ivn,
+            "locs": self.location
+        }
+        return pprint.pformat(repr_dict, indent=1, compact=True)

@@ -3,7 +3,7 @@ from pprint import pprint
 
 from antra import *
 from antra.interchange import BatchedInterchange
-from antra.location import location_to_str, reduce_dim
+from antra.location import location_to_str, reduce_dim, serialize_location
 
 import torch
 import torch.nn.functional as F
@@ -152,11 +152,7 @@ def test_find_abstraction():
         print(f"a & b = {node}, hidden1 = {hidden1_val}, hidden2 = {hidden2_val}")
         assert expected == low_model.compute(li)
 
-
-
-def test_mapping_generation():
-    high_model= BooleanLogicProgram()
-    low_model = NeuralNetwork()
+def get_inputs():
     low_inputs = [
         GraphInput({
             "leaf1": torch.tensor(a),
@@ -183,6 +179,13 @@ def test_mapping_generation():
         })
         for (a, b, c, y) in product((False, True), repeat=4)
     ]
+    return low_inputs, high_inputs, high_ivns
+
+def test_mapping_generation():
+    high_model= BooleanLogicProgram()
+    low_model = NeuralNetwork()
+
+    low_inputs, high_inputs, high_ivns = get_inputs()
 
     fixed_node_mapping =  {x: {x: None} for x in ["root", "leaf1",  "leaf2", "leaf3"]}
     low_nodes_to_indices = {
@@ -217,31 +220,7 @@ def test_mapping_generation():
 def test_abstraction_medium():
     high_model= BooleanLogicProgram()
     low_model = NeuralNetwork()
-    low_inputs = [
-        GraphInput({
-            "leaf1": torch.tensor(a),
-            "leaf2": torch.tensor(b),
-            "leaf3": torch.tensor(c)
-        }) for (a, b, c) in product((-1., 1.), repeat=3)
-    ]
-    high_inputs = [
-        GraphInput({
-            "leaf1": torch.tensor(a),
-            "leaf2": torch.tensor(b),
-            "leaf3": torch.tensor(c)
-        }) for (a, b, c) in product((False, True), repeat=3)
-    ]
-
-    high_ivns = [
-        Intervention({
-            "leaf1": torch.tensor(a),
-            "leaf2": torch.tensor(b),
-            "leaf3": torch.tensor(c),
-        }, {
-            "node": torch.tensor(y)
-        })
-        for (a, b, c, y) in product((True, False), repeat=4)
-    ]
+    low_inputs, high_inputs, high_ivns = get_inputs()
 
     fixed_node_mapping =  {x: {x: None} for x in ["root", "leaf1",  "leaf2", "leaf3"]}
     low_nodes_to_indices = {
@@ -345,32 +324,7 @@ def test_abstraction_medium():
 def test_abstraction_medium_multi_loc():
     high_model= BooleanLogicProgram()
     low_model = NeuralNetwork()
-    low_inputs = [
-        GraphInput({
-            "leaf1": torch.tensor(a),
-            "leaf2": torch.tensor(b),
-            "leaf3": torch.tensor(c)
-        }) for (a, b, c) in product((-1., 1.), repeat=3)
-    ]
-
-    high_inputs = [
-        GraphInput({
-            "leaf1": torch.tensor(a),
-            "leaf2": torch.tensor(b),
-            "leaf3": torch.tensor(c)
-        }) for (a, b, c) in product((False, True), repeat=3)
-    ]
-
-    high_ivns = [
-        Intervention({
-            "leaf1": torch.tensor(a),
-            "leaf2": torch.tensor(b),
-            "leaf3": torch.tensor(c),
-        }, {
-            "node": torch.tensor(y)
-        })
-        for (a, b, c, y) in product((True, False), repeat=4)
-    ]
+    low_inputs, high_inputs, high_ivns = get_inputs()
 
     fixed_node_mapping =  {x: {x: None} for x in ["root", "leaf1",  "leaf2", "leaf3"]}
     low_nodes_to_indices = {
@@ -477,45 +431,6 @@ def test_abstraction_medium_multi_loc():
         assert expected_high_res == high_res
         assert (expected_low_res == expected_high_res) == result[keys]
 
-    # success_list = []
-    # for result, mapping in find_abstr_res:
-    #     low_node = list(mapping["node"].keys())[0]
-    #     low_loc = mapping["node"][low_node]
-    #     red_low_loc = reduce_dim(low_loc, 0)
-    #     if low_loc is None: continue
-    #     print(f"Low node and loc: {low_node}{location_to_str(low_loc,add_brackets=True)}")
-    #     print(f"Reduced loc: {red_low_loc}")
-    #
-    #     success = True
-    #     verify_mapping(ca, mapping, result, low_inputs, low_model)
-    #     # G, causal_edges = construct_graph(low_model,high_model, mapping, result, realizations_to_inputs, "node", "root")
-    #     # cliques = find_cliques(G, causal_edges, 5)
-    #
-    #     # print("cliques:", cliques)
-    #     # x = input()
-    #
-
-    #
-    #         # print(f"{expected_low_res=}")
-    #         # print(f"{expected_high_res=}")
-    #         #
-    #         # print("low_res", low_res)
-    #         # print("high_res", high_res)
-    #         # print("low:",low_ivn.intervention.values)
-    #         # print("lowbase:", low_ivn.base.values)
-    #         # print("high:", high_ivn.intervention.values)
-    #         # print("highbase:", high_ivn.base.values)
-    #         # print("success:", result[keys])
-    #         #
-    #         # print("\n\n")
-    #         # verify_intervention(mapping,low_intervention, high_intervention, result[keys])
-    #
-    #         if not result[keys]:
-    #             success = False
-    #
-    #     success_list.append((success,mapping))
-    #
-    # pprint(success_list)
 
 #for mapping in create_possible_mappings(low_model,high_model, fixed_assignments={x:{x:Location()[:]} for x in ["bool_root", "leaf1",  "leaf2", "leaf3", "leaf4"]}):
 #    print(mapping)
@@ -524,32 +439,7 @@ def test_abstraction_medium_multi_loc():
 def test_abstraction_medium_equality():
     high_model= BooleanLogicProgram()
     low_model = NeuralNetwork()
-    low_inputs = [
-        GraphInput({
-            "leaf1": torch.tensor(a),
-            "leaf2": torch.tensor(b),
-            "leaf3": torch.tensor(c)
-        }) for (a, b, c) in product((-1., 1.), repeat=3)
-    ]
-
-    high_inputs = [
-        GraphInput({
-            "leaf1": torch.tensor(a),
-            "leaf2": torch.tensor(b),
-            "leaf3": torch.tensor(c)
-        }) for (a, b, c) in product((False, True), repeat=3)
-    ]
-
-    high_ivns = [
-        Intervention({
-            "leaf1": torch.tensor(a),
-            "leaf2": torch.tensor(b),
-            "leaf3": torch.tensor(c),
-        }, {
-            "node": torch.tensor(y)
-        })
-        for (a, b, c, y) in product((False, True), repeat=4)
-    ]
+    low_inputs, high_inputs, high_ivns = get_inputs()
 
     fixed_node_mapping =  {x: {x: None} for x in ["root", "leaf1",  "leaf2", "leaf3"]}
     low_nodes_to_indices = {
@@ -607,21 +497,56 @@ def test_abstraction_medium_equality():
 
             if not d["ivn_eq"]: success = False
 
-            # print(f"{expected_low_res=}")
-            # print(f"{expected_high_res=}")
-
-            # print("low_res", low_ivn_res)
-            # print("high_res", high_ivn_res)
-            # print("low intervention:",low_ivn.intervention.values)
-            # print(f"low loc {low_node}", location.location_to_str(low_ivn.location[low_node], add_brackets=True))
-            # print("lowbase:", low_ivn.base.values)
-            # print("high intervetion:", high_ivn.intervention.values)
-            # print("highbase:", high_ivn.base.values)
-            # print("success:", result[keys])
-            #
-            # print("\n\n")
-            # verify_intervention(mapping,low_intervention, high_intervention, result[keys])
-
         success_list.append((success,mapping))
 
     pprint(success_list)
+
+
+def test_abstraction_medium_origins():
+    high_model= BooleanLogicProgram()
+    low_model = NeuralNetwork()
+    low_inputs, high_inputs, high_ivns = get_inputs()
+
+    fixed_nodes = ["root", "leaf1",  "leaf2", "leaf3"]
+
+    fixed_node_mapping =  {x: {x: None} for x in fixed_nodes}
+    low_nodes_to_indices = {
+        "hidden2": [None],
+        "hidden1": [LOC[:,0], LOC[:, 1], LOC[:, 2], LOC[:,:2], LOC[:,1:], LOC[:, :]]
+    }
+    experiment = BatchedInterchange(
+        low_model=low_model,
+        high_model=high_model,
+        low_inputs=low_inputs,
+        high_inputs=high_inputs,
+        high_interventions=high_ivns,
+        low_nodes_to_indices=low_nodes_to_indices,
+        fixed_node_mapping=fixed_node_mapping,
+        store_low_interventions=True,
+        trace_realization_origins=True,
+        result_format="equality",
+        batch_size=12,
+    )
+
+    find_abstr_res = experiment.find_abstractions()
+
+    for result, mapping in find_abstr_res:
+        low_node = list(mapping["node"].keys())[0]
+        low_loc = mapping["node"][low_node]
+        ser_low_loc = serialize_location(low_loc)
+        red_low_loc = reduce_dim(low_loc, 0)
+        if low_loc is None: continue
+
+        for keys in result:
+            low_ivn_key, high_ivn_key = keys
+            low_ivn = experiment.low_keys_to_interventions[low_ivn_key]
+            high_ivn = experiment.high_keys_to_interventions[high_ivn_key]
+
+            rzn = low_ivn.realization
+            org_ivn = rzn.origins[(low_node, ser_low_loc)]
+
+            low_ivn_values = low_ivn.intervention[low_node]
+            _, full_rzn_values = low_model.intervene_node(low_node, org_ivn)
+            rzn_values = full_rzn_values[red_low_loc]
+            assert torch.allclose(low_ivn_values, rzn_values)
+
