@@ -358,10 +358,10 @@ class Intervention:
         # otherwise, we just do the default
         if ivn is None:
             ivn = self.intervention.keys
+
         repr_dict = {
             "base": self.base.keys,
             "interv": ivn,
             "locs": self.location
         }
         return pprint.pformat(repr_dict, indent=1, compact=True)
-

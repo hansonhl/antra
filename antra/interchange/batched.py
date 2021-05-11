@@ -228,7 +228,7 @@ class BatchedInterchange:
                     total_new_realizations += num_new_realizations
                     merge_realization_mappings(new_realizations, realizations)
 
-            log.info(f'end of dataloader; {total_new_realizations} new realizations')
+            log.debug(f'end of iter {iteration}; {total_new_realizations} new realizations')
             if iteration == 0:
                 icd.did_empty_interventions = True
             iteration += 1
