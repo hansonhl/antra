@@ -3,10 +3,10 @@ import itertools
 from .intervention import Intervention
 from .graph_node import GraphNode
 from .graph_input import GraphInput
-from .location import Location
+from .utils import serialize
 
 from typing import *
-from collections import deque
+from collections import defaultdict
 
 import logging
 
@@ -216,17 +216,25 @@ class ComputationGraph:
     def set_state_dict(self, d):
         pass
         
-    def compute_node_partitions(self, input1, input2):
+    def compute_node_partitions(self, input1, input2, ignore_nodes=None):
         partition = defaultdict(set)
+        if ignore_nodes is None:
+            ignore_nodes = set()
         for node in self.nodes:
-            int1 = Intervention(input1, {node: self.compute_node(node,input2)})
-            partition[self.intervene_node("root", int1)[1]].add(node)
+            if node in ignore_nodes: continue
+            ivn = Intervention(
+                input1, {node: self.compute_node(node,input2)},
+                cache_results=False
+            )
+            _, ivn_res = self.intervene(ivn)
+            ser_ivn_res = serialize(ivn_res)
+            partition[ser_ivn_res].add(node)
         return partition
 
     @property
-    def model(self) -> "torch.nn.Module":
+    def model(self):
         return self._model
 
     @model.setter
-    def model(self, model: "torch.nn.Module"):
+    def model(self, model):
         self._model = model
