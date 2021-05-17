@@ -617,7 +617,29 @@ def merge_realization_mappings(current: RealizationMapping, other: RealizationMa
         else:
             current[high_node_and_val].extend(other[high_node_and_val])
 
+# TODO: move this to separate utils module
+def pack_graph_inputs(
+        graph_inputs: Sequence[GraphInput],
+        batch_dim: int = 0,
+        non_batch_inputs: Optional[Sequence[str]] = None
+) -> Dict:
+    batch_size = len(graph_inputs)
+    base_lists = defaultdict(list)
+    for gi in graph_inputs:
+        for leaf, val in gi.values.items():
+            base_lists[leaf].append(val)
 
+    # make sure base lists have equal length
+    if not all(len(l) == batch_size for l in base_lists.values()):
+        for leaf, vals in base_lists.items():
+            if len(vals) != batch_size:
+                raise RuntimeError(
+                    f"List of values for leaf `{leaf}` has shorter length ({len(vals)}) than batch size ({batch_size})")
+
+    return batchify(base_lists, batch_dim, set(), non_batch_inputs)
+
+
+# TODO: move this to separate utils module
 def pack_interventions(
     interventions: Sequence[Intervention],
     batch_dim: int = 0,
