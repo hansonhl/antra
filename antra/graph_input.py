@@ -13,10 +13,16 @@ class GraphInput:
     `GraphInput` objects are intended to be immutable, so that its hash value
     can have a one-to-one correspondence to the dict stored in it. """
 
-    def __init__(self, values: Dict[str,Any], cache_results: bool=True,
-                 batched: bool=False, batch_dim: int=0, keys: Sequence=None,
-                 key_leaves: Optional[Sequence[str]]=None,
-                 non_batch_leaves: Optional[Sequence[str]]=None):
+    def __init__(
+            self,
+            values: Dict[str,Any],
+            cache_results: bool=True,
+            batched: bool=False,
+            batch_dim: int=0,
+            keys: Sequence=None,
+            key_leaves: Optional[Sequence[str]]=None,
+            non_batch_leaves: Optional[Sequence[str]]=None
+    ):
         """
         :param values: A dict mapping from each leaf node name (str) to an input
             value for that node (Any)
@@ -131,4 +137,8 @@ class GraphInput:
             new_values,
             cache_results=self.cache_results,
             batched=self.batched,
-            batch_dim=self.batch_dim, keys=self.keys, key_leaves=self.key_leaves)
+            batch_dim=self.batch_dim,
+            keys=self.keys,
+            key_leaves=self.key_leaves,
+            non_batch_leaves=self.non_batch_leaves
+        )
