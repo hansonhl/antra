@@ -9,6 +9,10 @@ from typing import *
 NodeName = str
 AbstractionMapping = Dict[NodeName, Dict[NodeName, LocationType]]
 
+def get_intermediate_node_mapping(mapping, high_model):
+    leaves_and_root = {l.name for l in high_model.leaves} | {high_model.root.name}
+    return {n: d for n, d in mapping.items() if n not in leaves_and_root}
+
 def mapping_to_string(mapping: AbstractionMapping, ignore_nodes: None):
     if ignore_nodes is None:
         ignore_nodes = []
