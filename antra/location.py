@@ -22,25 +22,24 @@ class Location:
         if isinstance(x, (int, tuple, slice)) or x is Ellipsis:
             return x
         elif isinstance(x, str):
-            return Location.parse_str(x)
+            return parse_str(x)
         else:
             raise ValueError(f"Invalid input type {type(x)}. Must be int, tuple, slice, str or Ellipsis")
 
-    @staticmethod
-    def parse_str(s):
-        if "," not in s:
-            return Location.parse_dim(s.strip())
-        else:
-            return tuple(Location.parse_dim(x.strip()) for x in s.split(","))
 
-    @staticmethod
-    def parse_dim(s):
-        s = s.strip("[]")
-        return Ellipsis if s == "..." \
-            else True if s == "True" \
-            else False if s == "False" \
-            else str_to_slice(s) if ":" in s \
-            else int(s)
+def parse_str(s):
+    if "," not in s:
+        return parse_dim(s.strip())
+    else:
+        return tuple(parse_dim(x.strip()) for x in s.split(","))
+
+def parse_dim(s):
+    s = s.strip("[]")
+    return Ellipsis if s == "..." \
+        else True if s == "True" \
+        else False if s == "False" \
+        else str_to_slice(s) if ":" in s \
+        else int(s)
 
 def str_to_slice(s: str) -> slice:
     return slice(*map(lambda x: int(x.strip()) if x.strip() else None, s.split(':')))

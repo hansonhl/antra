@@ -2,7 +2,7 @@ import re
 import pprint
 from collections import defaultdict
 
-from .location import Location, location_to_str, LocationType, deserialize_location
+from .location import Location, location_to_str, LocationType, deserialize_location, parse_str
 from .graph_input import GraphInput
 from .utils import serialize, serialize_batch
 from .realization import Realization
@@ -146,7 +146,7 @@ class Intervention:
                 if loc_search:
                     node_name = full_name.split("[")[0]  # bare node name without indexing
                     loc_str = loc_search.group().strip("[]")
-                    loc = Location.parse_str(loc_str)
+                    loc = parse_str(loc_str)
                     to_delete.append(full_name)
 
                     if node_name in intervention:
