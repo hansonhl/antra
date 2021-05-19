@@ -155,6 +155,10 @@ class ComputationGraph:
         #     self.clear_caches(intervention)
         #     intervention.cache_results = False
 
+    def set_cache_device(self, cache_device):
+        for node in self.nodes.values():
+            node.cache_device = cache_device
+
     def clear_caches(self,
                      inputs: Union[GraphInput, Intervention, None] = None,
                      force=False):
