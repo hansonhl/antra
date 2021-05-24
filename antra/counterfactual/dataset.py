@@ -121,7 +121,8 @@ class RandomCounterfactualDataset(IterableDataset):
                 ivn_src_idxs = torch.randperm(self.base_dataset_len)[:self.num_random_ivn_srcs]
             else:
                 if base_idx not in self.base_idxs_to_ivn_src_idxs:
-                    ivn_src_idxs = torch.randperm(self.base_dataset_len)[:self.num_random_ivn_srcs]
+                    # clone() makes sure only memory is allocated to store just the slice, not the whole randperm tensor
+                    ivn_src_idxs = torch.randperm(self.base_dataset_len)[:self.num_random_ivn_srcs].clone()
                     self.base_idxs_to_ivn_src_idxs[base_idx] = ivn_src_idxs
                 else:
                     ivn_src_idxs = self.base_idxs_to_ivn_src_idxs[base_idx]
@@ -129,20 +130,24 @@ class RandomCounterfactualDataset(IterableDataset):
             for ivn_src_idx in ivn_src_idxs:
                 base = self.base_dataset[base_idx]
                 ivn_src = self.base_dataset[ivn_src_idx]
-                high_ivn = self.construct_high_intervention(base, ivn_src)
-                low_base_input = self.construct_low_input(base)
-                low_ivn_src = self.construct_low_input(ivn_src)
-                weight = self.intervention_weight_fn(base, ivn_src) if \
-                    self.intervention_weight_fn is not None else None
-                yield {
-                    "high_intervention": high_ivn,
-                    "low_base_input": low_base_input,
-                    "low_intervention_source": low_ivn_src,
-                    "mapping": self.mapping,
-                    "weight": weight,
-                    "base_idx": base_idx,
-                    "ivn_src_idx": ivn_src_idx.item()
-                }
+
+                yield self.prepare_one_example(base, ivn_src, base_idx, ivn_src_idx.item())
+
+    def prepare_one_example(self, base, ivn_src, base_idx, ivn_src_idx):
+        high_ivn = self.construct_high_intervention(base, ivn_src)
+        low_base_input = self.construct_low_input(base)
+        low_ivn_src = self.construct_low_input(ivn_src)
+        weight = self.intervention_weight_fn(base, ivn_src) if \
+            self.intervention_weight_fn is not None else None
+        return {
+            "high_intervention": high_ivn,
+            "low_base_input": low_base_input,
+            "low_intervention_source": low_ivn_src,
+            "mapping": self.mapping,
+            "weight": weight,
+            "base_idx": base_idx,
+            "ivn_src_idx": ivn_src_idx
+        }
 
     def construct_high_intervention(self, base_ex, ivn_src_ex) -> antra.Intervention:
         """ Construct the high level intervention object given two examples.
