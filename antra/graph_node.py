@@ -7,7 +7,7 @@ from .utils import copy_helper
 from typing import *
 
 if importlib.util.find_spec("torch"):
-    import antra.torch_utils as torch_utils
+    from .torch_utils import *
 
 
 NodeName = str

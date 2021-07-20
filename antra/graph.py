@@ -38,7 +38,7 @@ class ComputationGraph:
             if node.name in self.nodes:
                 if self.nodes[node.name] is not node:
                     raise RuntimeError(
-                        "Two different nodes cannot have the same name!")
+                        f"Two different nodes cannot have the same name! Found existing node: {self.nodes[node.name]} with the same name of this node: {node.name}")
                 else:
                     return
             self.nodes[node.name] = node

@@ -1,9 +1,9 @@
 from typing import *
 import pprint
 
-import antra.utils as utils
-from antra.utils import SerializedType
-from antra.location import SerializedLocationType
+from .utils import serialize
+from .utils import SerializedType
+from .location import SerializedLocationType
 
 SerializedRealization=Tuple[Tuple[Tuple[str, SerializedLocationType], SerializedType], ...]
 RealizationKey = Tuple[str, SerializedLocationType]
@@ -65,7 +65,7 @@ class Realization:
             self._origins[k] = v
 
     def serialize(self) -> SerializedRealization:
-        return tuple((k, utils.serialize(self[k])) for k in sorted(self.keys()))
+        return tuple((k, serialize(self[k])) for k in sorted(self.keys()))
 
     def __repr__(self):
         repr_dict = {
