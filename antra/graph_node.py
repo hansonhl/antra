@@ -112,7 +112,7 @@ class GraphNode:
                (not from_interv) and isinstance(inputs, GraphInput)
 
         if inputs.batched:
-            result = torch_utils.get_batch_from_cache(
+            result = get_batch_from_cache(
                 inputs, cache, self.cache_device, output_device_dict)
         else:
             result = cache.get(inputs.keys, None)
@@ -132,7 +132,7 @@ class GraphNode:
             else self.base_output_devices
 
         if inputs.batched:
-            torch_utils.save_batch_to_cache(inputs, result, cache, self.cache_device, output_device_dict)
+            save_batch_to_cache(inputs, result, cache, self.cache_device, output_device_dict)
         else:
             result_for_cache = result
             if self.cache_device is not None:
