@@ -5,3 +5,4 @@ __pycache__/
 api_key.txt
 tests/bert_compgraph/data/
 examples/.ipynb_checkpoints/
+.ipynb_checkpoints/

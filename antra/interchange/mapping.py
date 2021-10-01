@@ -95,6 +95,8 @@ def create_possible_mappings(
     :param low_model:
     :param high_model:
     :param fixed_assignments: dict: str name of highlevel node -> (dict: name of low level node -> locations)
+    :param nodes_to_indices: Mapping between low nodes and locations to intervene
+    :param unwanted_low_nodes:
     :return: list(dict: str name of highlevel node -> (dict: name of low level node -> locations))
     """
     class MappingCertificate:

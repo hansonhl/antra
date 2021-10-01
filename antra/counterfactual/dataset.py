@@ -43,7 +43,7 @@ class ListCounterfactualDataset(Dataset):
         base_idx, ivn_src_idx = self.intervention_pairs[item]
         base = self.base_dataset[base_idx]
         ivn_src = self.base_dataset[ivn_src_idx]
-        high_ivn = self.construct_intervention(base, ivn_src)
+        high_ivn = self.construct_high_intervention(base, ivn_src)
         weight = None
         if self.intervention_weight is not None:
             if isinstance(self.intervention_weight, list):
@@ -58,14 +58,16 @@ class ListCounterfactualDataset(Dataset):
             "high_intervention": high_ivn,
             "low_base_input": low_base_input,
             "low_intervention_source": low_ivn_src,
-            "weight": weight
+            "weight": weight,
+            "base_idx": base_idx,
+            "ivn_src_idx": ivn_src_idx
         }
 
     def construct_low_input(self, example) -> antra.GraphInput:
         """ Construct a GraphInput object for the low level model"""
         raise NotImplementedError
 
-    def construct_intervention(self, base, ivn_source) -> antra.Intervention:
+    def construct_high_intervention(self, base, ivn_source) -> antra.Intervention:
         """ Construct the high level intervention object given two examples.
 
         :param base:
@@ -75,6 +77,9 @@ class ListCounterfactualDataset(Dataset):
 
     def collate_fn(self, batch):
         return cf_collate_fn(batch, self.mapping, batch_dim=self.batch_dim)
+
+    def get_dataloader(self, **kwargs) -> DataLoader:
+        return DataLoader(self, collate_fn=self.collate_fn, **kwargs)
 
 class RandomCounterfactualDataset(IterableDataset):
     def __init__(
@@ -87,6 +92,19 @@ class RandomCounterfactualDataset(IterableDataset):
             num_random_ivn_srcs=20,
             fix_examples=False
     ):
+        """ Randomly sample pairs of items from a dataset to do counterfactual
+            training.
+
+        :param base_dataset:
+        :param mapping:
+        :param intervention_weight_fn:
+        :param batch_dim:
+        :param num_random_bases:
+        :param num_random_ivn_srcs:
+        :param fix_examples: Use the same set of pairs after the total number of
+            pairs (= num_random_bases * num_random_ivn_srcs) has been exhausted.
+            By default new pairs will be sampled.
+        """
         super(RandomCounterfactualDataset, self).__init__()
 
         # noinspection PyTypeChecker
@@ -246,7 +264,7 @@ def cf_collate_fn(batch, mapping, batch_dim=0):
     )
 
     weights = None
-    if batch[0]["weight"] is not None:
+    if "weight" in batch[0] and batch[0]["weight"] is not None:
         weights = torch.tensor([d["weight"] for d in batch])
     base_idxs = [d["base_idx"] for d in batch]
     ivn_src_idxs = [d["ivn_src_idx"] for d in batch]
