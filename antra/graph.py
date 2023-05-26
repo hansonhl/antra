@@ -1,4 +1,7 @@
 import itertools
+from functools import lru_cache
+
+import torch
 
 from .intervention import Intervention
 from .graph_node import GraphNode
@@ -61,8 +64,10 @@ class ComputationGraph:
 
         for name in intervention.intervention._values.keys():
             if name not in self.nodes:
-                raise RuntimeError("Node in intervention experiment not found "
-                                   "in computation graph: %s" % name)
+                raise RuntimeError(f'Node in intervention experiment not found '
+                                   f'requsted: {name}\n'
+                                   f'valid nodes: {self.nodes}')
+
 
     def compute(self, inputs: GraphInput):
         """ Run forward pass through graph with a given set of inputs
@@ -219,20 +224,56 @@ class ComputationGraph:
 
     def set_state_dict(self, d):
         pass
-        
-    def compute_node_partitions(self, input1, input2, ignore_nodes=None):
+
+    # todo: verify that this wasn't in use somewhere else?
+    # def compute_node_partitions(self, input1, input2, ignore_nodes=None):
+    #     partition = defaultdict(set)
+    #     if ignore_nodes is None:
+    #         ignore_nodes = set()
+    #     for node in self.nodes:
+    #         if node in ignore_nodes: continue
+    #         ivn = Intervention(
+    #             input1, {node: self.compute_node(node,input2)},
+    #             cache_results=False
+    #         )
+    #         _, ivn_res = self.intervene(ivn)
+    #         ser_ivn_res = serialize(ivn_res)
+    #         partition[ser_ivn_res].add(node)
+
+    # todo: do we want LRU cache
+    @lru_cache
+    def compute_node_partitions(self, ivn1: Intervention, ivn2: Intervention,
+                                ignore_nodes=None) -> DefaultDict[bool, Set[str]]:
+        """To be used only for high level model interventions.
+
+        Will test whether a given intervention causes a high level computation graph to
+        be true or false.
+        Calling users will be able to select intervention pairs (of inputs) and specific nodes to
+        intervene on in order to have selective interchange experiments.
+
+        Returns a mapping from true/false to the sets of nodes that cause the graph to
+        take on that value
+        """
         partition = defaultdict(set)
-        if ignore_nodes is None:
+        if ignore_nodes is None:        # todo: when is this used
             ignore_nodes = set()
         for node in self.nodes:
             if node in ignore_nodes: continue
-            ivn = Intervention(
-                input1, {node: self.compute_node(node,input2)},
-                cache_results=False
-            )
-            _, ivn_res = self.intervene(ivn)
-            ser_ivn_res = serialize(ivn_res)
-            partition[ser_ivn_res].add(node)
+            # if node == 'root': continue
+            # todo: verify that interventions at root make sense; Josh: I think they do / this
+            #  is necessary
+            # create a new intervention object with base_input copied,
+            # except swapping in the value of node in ivn2
+            tmp_ivn = Intervention(ivn1.base,
+                                   {node: self.intervene_node(node, ivn2)[1]},
+                                   cache_results=False,
+                                   cache_base_results=False)
+            # then calculate the outcome of the graph under this intervention
+            res = self.intervene_node("root", tmp_ivn)[1]
+            if res:
+                partition[True].add(node)
+            else:
+                partition[False].add(node)
         return partition
 
     @property

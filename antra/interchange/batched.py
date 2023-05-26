@@ -13,6 +13,7 @@ from tqdm import tqdm
 from antra import *
 from antra.interchange.mapping import create_possible_mappings, AbstractionMapping
 from antra.realization import Realization, SerializedRealization
+import deprecation
 
 log = logging.getLogger(__name__)
 
@@ -53,8 +54,9 @@ class BatchedInterchange:
         cache_base_results: bool = True,
         result_format: Union[str, Callable] = "equality",
         store_low_interventions: bool = False,
-        trace_realization_origins: bool = False,
-        device: Optional[torch.device] = None
+        trace_realization_origins: bool = False,        # to be deprecated in favor of ivn_sample_fcn
+        device: Optional[torch.device] = None,
+        ivn_sample_fcn: Optional[Callable[[Intervention, Intervention], bool]] = None
     ):
         """
         :param low_model:
@@ -79,9 +81,10 @@ class BatchedInterchange:
             "return_all"} or a callable object.
         :param store_low_interventions: store all the low-level interventions
             that are generated in `self.low_keys_to_interventions`
-        :param trace_realization_origins: whether to trace the origin of low
-            intervention values
+        :param trace_realization_origins: DEPRECATED: set ivn_sample_fcn instead
+            whether to trace the origin of low intervention values
         :param device:
+        :param ivn_sample_fcn:
         """
         if (not callable(result_format)) and (result_format not in BatchedInterchange.accepted_result_format):
             raise ValueError(f"Incorrect result format '{result_format}'. "
@@ -119,7 +122,13 @@ class BatchedInterchange:
 
         self.result_format = result_format
         self.store_low_interventions = store_low_interventions
-        self.trace_realization_origins = trace_realization_origins
+        if trace_realization_origins is not None:
+            logging.warning(f'trace realization origins is deprecated. Pass a callable to ivn_sample_fcn instead')
+            if ivn_sample_fcn is None:
+                logging.warning(f'Continuation warning: setting trace realization origins without a '
+                                f'ivn_sample_fcn will have no effect')
+        # self.trace_realization_origins = trace_realization_origins
+        self.ivn_sample_fn = ivn_sample_fcn
 
         self.high_keys_to_interventions = {ivn.keys: ivn for ivn in high_interventions}
         self.low_keys_to_interventions = {}
@@ -144,6 +153,7 @@ class BatchedInterchange:
             self.device = torch.device('cpu')
         else:
             self.device = device
+
 
     def _get_high_intervention_range(self, high_interventions: Sequence[Intervention]) \
         -> Dict[HighNodeName, Set[SerializedType]]:
@@ -180,7 +190,8 @@ class BatchedInterchange:
         """
         self.curr_mapping: AbstractionMapping = mapping
 
-        icd = InterchangeDataset(mapping, self, collate_fn=self.collate_fn)
+        icd = InterchangeDataset(mapping, self, collate_fn=self.collate_fn,
+                                 ivn_sample_fn=self.ivn_sample_fn)
         icd_dataloader = icd.get_dataloader(batch_size=self.batch_size, shuffle=False)
 
         results = {}  # this accumulates all results
@@ -326,8 +337,14 @@ class BatchedInterchange:
         # duplicate_ct = 0
 
         # TODO: Keep track of where the interventions came from
-        origins = [self.low_keys_to_interventions[low_ivn_batch.keys[i]] \
-                   for i in range(actual_batch_size)] if self.trace_realization_origins else None
+        # josh: we seem never to need low origin sources, so we can probably remove
+        # low_origins = [self.low_keys_to_interventions[low_ivn_batch.keys[i]] \
+        #                for i in range(actual_batch_size)] if self.trace_realization_origins else None
+        if self.ivn_sample_fn is not None:
+            high_origins = [self.high_keys_to_interventions[high_ivn_batch.keys[i]] \
+                            for i in range(actual_batch_size)]
+        else:
+            high_origins = None
 
         for high_node, high_values in high_ivn_res.items():
             # skip if we do not ever intervene on this high level node
@@ -352,8 +369,10 @@ class BatchedInterchange:
                     # print(low_values)
                     for i in range(actual_batch_size):
                         _low_val = utils.idx_by_dim(low_values, i, low_ivn_batch.batch_dim)
-                        if origins:
-                            rzns[i].add(key, _low_val, origins[i])
+                        # if low_origins is not None:
+                        #     rzns[i].add(key, _low_val, low_origins[i])
+                        if high_origins is not None:        # i.e. have ivn_sample_fcn
+                            rzns[i].add(key, _low_val, high_origins[i])
                         else:
                             rzns[i][key] = _low_val
 
@@ -440,7 +459,8 @@ class InterchangeDataset(IterableDataset):
     """
 
     def __init__(self, mapping: AbstractionMapping, ca: BatchedInterchange,
-                 collate_fn: Callable):
+                 collate_fn: Callable,
+                 ivn_sample_fn: Optional[Callable[[Intervention, Intervention], bool]] = None):
         super(InterchangeDataset, self).__init__()
         self.ca = ca
 
@@ -455,6 +475,7 @@ class InterchangeDataset(IterableDataset):
         self.mapping = mapping
         self.collate_fn = collate_fn
         self.did_empty_interventions = False
+        self.ivn_sample_fn = ivn_sample_fn
         # self.populate_dataset()
 
     @property
@@ -465,29 +486,30 @@ class InterchangeDataset(IterableDataset):
         merge_realization_mappings(self.all_realizations, self.curr_realizations)
         self.curr_realizations = new_realizations
 
-    def get_intervention_from_realization(self, low_base: GraphInput, rzn: Realization) -> Intervention:
-        # partial_interv_dict may contain multiple entries with same node but different locations,
-        # e.g {(nodeA, loc1): val, (nodeA, loc2): val}, need to find and merge them
-        val_dict, loc_dict = defaultdict(list), defaultdict(list)
+    # deprecated with new ivn_sample_fcn ; todo: remove
+    # def get_intervention_from_realization(self, low_base: GraphInput, rzn: Realization) -> Intervention:
+    #     # partial_interv_dict may contain multiple entries with same node but different locations,
+    #     # e.g {(nodeA, loc1): val, (nodeA, loc2): val}, need to find and merge them
+    #     val_dict, loc_dict = defaultdict(list), defaultdict(list)
+    #
+    #     for (node_name, ser_low_loc), val in rzn.items():
+    #         val_dict[node_name].append(val)
+    #         low_loc = location.deserialize_location(ser_low_loc)
+    #         loc_dict[node_name].append(low_loc)
+    #
+    #     for node_name in val_dict.keys():
+    #         if len(val_dict[node_name]) == 1:
+    #             val_dict[node_name] = val_dict[node_name][0]
+    #         if len(loc_dict[node_name]) == 1:
+    #             if loc_dict[node_name][0] is None:
+    #                 del loc_dict[node_name]
+    #             else:
+    #                 loc_dict[node_name] = loc_dict[node_name][0]
+    #
+    #     return Intervention(low_base, intervention=val_dict, location=loc_dict,
+    #                         realization=rzn)
 
-        for (node_name, ser_low_loc), val in rzn.items():
-            val_dict[node_name].append(val)
-            low_loc = location.deserialize_location(ser_low_loc)
-            loc_dict[node_name].append(low_loc)
-
-        for node_name in val_dict.keys():
-            if len(val_dict[node_name]) == 1:
-                val_dict[node_name] = val_dict[node_name][0]
-            if len(loc_dict[node_name]) == 1:
-                if loc_dict[node_name][0] is None:
-                    del loc_dict[node_name]
-                else:
-                    loc_dict[node_name] = loc_dict[node_name][0]
-
-        return Intervention(low_base, intervention=val_dict, location=loc_dict,
-                            realization=rzn)
-
-    def _prepare_rzn_to_yield(self, low_base, high_intervention, rzn):
+    def _prepare_rzn_to_yield(self, low_base, high_intervention, rzn) -> Dict[str, Intervention]:
         low_intervention = Intervention.from_realization(low_base, rzn)
         if self.ca.store_low_interventions:
             self.ca.low_keys_to_interventions[low_intervention.keys] = low_intervention
@@ -497,14 +519,41 @@ class InterchangeDataset(IterableDataset):
         }
 
     # TODO: Yield while getting the realizations
+    # todo(josh note): with 2 examples, we go through and create realizations 6 times.. why
     def __iter__(self):
+        def yield_rzn_if_passes_filter(low_base, high_ivn, rzn):
+            """ If ivn_sample_fcn is set and we have a valid low_ivn with realization, then filter according to
+            ivn_sample_fcn.
+
+            Yields if valid, otherwise does nothing
+            """
+            # common code to be done before any yielding
+            rzn = self._prepare_rzn_to_yield(low_base, high_ivn, rzn)
+            low_ivn = rzn['low_intervention']
+
+            # Filter only if certain conditions satisfied
+            if self.ivn_sample_fn is None or low_ivn.realization is None or low_ivn.realization.is_empty():
+                yield rzn
+
+            # do the filtering
+            origin = list(low_ivn.realization.origins.values())
+            # todo: this is only true if, e.g. we're not intervening at multiple locations,
+            # verify when this happens
+            # assert len(origin) == 1, f'{low_ivn.realization.origins}'
+            if len(origin) > 1:
+                log.warning(f'Origins has len {len(origin)}. We take only the first value. Please verify.')
+            origin_ivn: Intervention = origin[0]          # this is an intervention
+            if self.ivn_sample_fn(high_ivn, origin_ivn):
+                yield rzn
+            # otherwise do nothing - did not pass filter; for loop execution will continue
+
         for high_intervention in self.ca.high_interventions:
             if self.did_empty_interventions and high_intervention.is_empty():
                 continue
             low_base = self.ca.high_keys_to_low_inputs[high_intervention.base.keys]
 
             if high_intervention.is_empty():
-                yield self._prepare_rzn_to_yield(low_base, high_intervention, Realization())
+                yield_rzn_if_passes_filter(low_base, high_intervention, Realization())
 
             high_interv: GraphInput = high_intervention.intervention
             all_realizations: List[Realization] = [Realization()]
@@ -519,8 +568,9 @@ class InterchangeDataset(IterableDataset):
                         rzn_copy = copy.copy(rzn)
                         rzn_copy.update(realization)
                         if is_last_one:
-                            if not rzn_copy.accepted: continue
-                            yield self._prepare_rzn_to_yield(low_base, high_intervention, rzn_copy)
+                            if not rzn_copy.accepted:
+                                continue
+                            yield_rzn_if_passes_filter(low_base, high_intervention, rzn_copy)
                         else:
                             new_partial_intervs.append(rzn_copy)
 
@@ -530,7 +580,7 @@ class InterchangeDataset(IterableDataset):
                         rzn_copy.accepted = True
 
                         if is_last_one:
-                            yield self._prepare_rzn_to_yield(low_base, high_intervention, rzn_copy)
+                            yield_rzn_if_passes_filter(low_base, high_intervention, rzn_copy)
                         else:
                             new_partial_intervs.append(rzn_copy)
 
